@@ -1,9 +1,10 @@
 from urllib.parse import quote
 
+
 from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 from typing import Optional
 import re
@@ -13,8 +14,10 @@ import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
+from contextlib import asynccontextmanager
 
-from security import cleanup_expired_cache, require_login, logout_user, login_user, get_current_user, JWT_EXPIRE_PERIOD
+from security import require_login, logout_user, login_user, get_current_user, JWT_EXPIRE_PERIOD
+from util import lru_cache_with_ttl
 
 # 配置logging
 logging.basicConfig(level=logging.INFO)
@@ -22,7 +25,64 @@ logger = logging.getLogger(__name__)
 
 from starlette.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="页面访问监控API")
+class TokenRefreshMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        # 如果有新生成的令牌，更新响应的cookie
+        if hasattr(request.state, 'new_token'):
+            response.set_cookie(
+                key="access_token", 
+                value=request.state.new_token, 
+                httponly=True, 
+                secure=False,  # 生产环境应设置为True
+                max_age=JWT_EXPIRE_PERIOD
+            )
+        return response
+
+# 配置MongoDB连接
+MONGODB_URI = os.getenv("MONGO_DB_CONN_STR", "mongodb://localhost:27017/")
+
+# 添加连接池配置和连接选项
+MONGODB_OPTIONS = {
+    'maxPoolSize': 100,  # 最大连接池大小
+    'minPoolSize': 10,   # 最小连接池大小
+    'maxIdleTimeMS': 30000,  # 连接最大空闲时间（毫秒）
+    'serverSelectionTimeoutMS': 5000,  # 服务器选择超时时间
+    'connectTimeoutMS': 20000,  # 连接超时时间
+    'socketTimeoutMS': 20000,  # socket超时时间
+    'heartbeatFrequencyMS': 20000,  # 心跳检测频率
+}
+
+# 应用连接池配置和连接选项
+client = AsyncIOMotorClient(MONGODB_URI, **MONGODB_OPTIONS)
+db = client["page_monitor"]
+stats_collection = db["monitor_stats"]
+
+# 定义lifespan事件处理器
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        # 添加索引以提高查询性能
+        # 为常用查询字段创建三级复合唯一索引（系统+日期+统计类型）
+        await stats_collection.create_index([("system", 1), ("date", 1), ("type", 1)], unique=True, background=True)
+        # 为单个查询字段创建索引
+        await stats_collection.create_index([("system", 1)], background=True)
+        await stats_collection.create_index([("date", 1)], background=True)
+        await stats_collection.create_index([("type", 1)], background=True)
+        # 为lastUpdated字段创建索引，方便按时间排序
+        await stats_collection.create_index([("lastUpdated", -1)], background=True)
+        
+        logger.info("MongoDB connection established successfully")
+        logger.info("MongoDB indexes created successfully")
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB or create indexes: {str(e)}")
+        raise
+    yield
+    # Shutdown
+    # 这里可以添加关闭时的清理代码
+
+app = FastAPI(title="页面访问监控API", lifespan=lifespan)
 
 # 获取CORS允许的源列表
 allow_origins_env = os.getenv("ALLOW_ORIGINS")
@@ -41,41 +101,21 @@ app.add_middleware(
     allow_headers=["*"],  # 允许所有头
 )
 
-
-class TokenRefreshMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # 如果有新生成的令牌，更新响应的cookie
-        if hasattr(request.state, 'new_token'):
-            response.set_cookie(
-                key="access_token", 
-                value=request.state.new_token, 
-                httponly=True, 
-                secure=False,  # 生产环境应设置为True
-                max_age=JWT_EXPIRE_PERIOD
-            )
-        return response
-
-
 app.add_middleware(TokenRefreshMiddleware)
 
 
-# MongoDB连接
-MONGODB_URI = os.getenv("MONGO_DB_CONN_STR", "mongodb://localhost:27017/")
-client = MongoClient(MONGODB_URI)
-db = client["page_monitor"]
-stats_collection = db["stats"]
+
 
 # 创建API路由
 api_router = APIRouter(prefix="/api")
 
-
+SANITIZE_PATTERN = re.compile(r'[.$]')
 def sanitize_key(key: str) -> str:
     """清理key中的特殊字符"""
     if not key:
         return "unknown"
     # 替换MongoDB保留字符
-    return re.sub(r'[.$]', '_', str(key))
+    return SANITIZE_PATTERN.sub('_', str(key))
 
 
 def sanitize_fingerprint(fingerprint: str) -> str:
@@ -121,9 +161,10 @@ async def _track_common(request: Request, data: dict, track_type: str, detail_ha
         # 调用具体处理函数获取update_fields
         update_fields = detail_handler(data, track_type, system, user_fingerprint, client_ip, ip_prefix, current_date)
         
-        # 按系统和日期分片存储数据
-        result = stats_collection.update_one(
-            {'system': system, 'date': current_date},
+        # 按系统、日期和统计类型三级分片存储数据
+        # 使用更高效的更新操作，减少数据库负载和并发竞争
+        result = await stats_collection.update_one(
+            {'system': system, 'date': current_date, 'type': track_type},
             update_fields,
             upsert=True
         )
@@ -131,6 +172,7 @@ async def _track_common(request: Request, data: dict, track_type: str, detail_ha
         return {"success": True, "matched_count": result.matched_count, "modified_count": result.modified_count}
 
     except Exception as e:
+        logger.error(f"跟踪{track_type}失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"跟踪{track_type}失败: {str(e)}")
 
 
@@ -147,37 +189,38 @@ async def track_pageview(request: Request, data: dict):
         
         return {
             '$inc': {
-                'pageViews.total': 1,
-                f'pageViews.byUrl.{url}': 1,
-                f'pageViews.byBrowser.{browser}': 1,
-                f'pageViews.byOS.{os_name}': 1,
-                f'pageViews.byDevice.{device}': 1,
+                'data.total': 1,
+                f'data.byUrl.{url}': 1,
+                f'data.byBrowser.{browser}': 1,
+                f'data.byOS.{os_name}': 1,
+                f'data.byDevice.{device}': 1,
                 # IP相关统计（使用IP前缀保护隐私）
-                f'pageViews.byIPPrefix.{ip_prefix}': 1,
-                f'pageViews.byUrlAndIPPrefix.{url}.{ip_prefix}': 1,
+                f'data.byIPPrefix.{ip_prefix}': 1,
+                f'data.byUrlAndIPPrefix.{url}.{ip_prefix}': 1,
                 # 用户指纹统计
-                f'pageViews.byUser.{user_fingerprint}': 1,
-                f'pageViews.byUrlAndUser.{url}.{user_fingerprint}': 1,
+                f'data.byUser.{user_fingerprint}': 1,
+                f'data.byUrlAndUser.{url}.{user_fingerprint}': 1,
                 # 组合维度统计
-                f'pageViews.byUrlAndBrowser.{url}.{browser}': 1,
-                f'pageViews.byUrlAndDevice.{url}.{device}': 1,
-                f'pageViews.byBrowserAndOS.{browser}.{os_name}': 1
+                f'data.byUrlAndBrowser.{url}.{browser}': 1,
+                f'data.byUrlAndDevice.{url}.{device}': 1,
+                f'data.byBrowserAndOS.{browser}.{os_name}': 1
             },
             '$set': {
                 'system': system,
                 'date': current_date,
+                'type': track_type,
                 'lastUpdated': datetime.utcnow()
             },
             # 记录唯一用户数（使用$addToSet确保每个用户只计数一次）
             '$addToSet': {
-                'pageViews.uniqueUsers': user_fingerprint,
-                f'pageViews.byUrlUniqueUsers.{url}': user_fingerprint,
-                f'pageViews.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint,
-                f'pageViews.byBrowserAndOsUniqueUsers.{browser}.{os_name}': user_fingerprint
+                'data.uniqueUsers': user_fingerprint,
+                f'data.byUrlUniqueUsers.{url}': user_fingerprint,
+                f'data.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint,
+                f'data.byBrowserAndOsUniqueUsers.{browser}.{os_name}': user_fingerprint
             }
         }
     
-    return await _track_common(request, data, "页面访问", pageview_handler)
+    return await _track_common(request, data, "pageViews", pageview_handler)
 
 
 @api_router.post("/track/download")
@@ -192,33 +235,34 @@ async def track_download(request: Request, data: dict):
         
         return {
             '$inc': {
-                'downloads.total': 1,
-                f'downloads.byFile.{file_name}': 1,
-                f'downloads.byUrl.{download_url}': 1,
-                f'downloads.bySourcePage.{source_page}': 1,
+                'data.total': 1,
+                f'data.byFile.{file_name}': 1,
+                f'data.byUrl.{download_url}': 1,
+                f'data.bySourcePage.{source_page}': 1,
                 # IP相关统计（使用IP前缀保护隐私）
-                f'downloads.byIPPrefix.{ip_prefix}': 1,
-                f'downloads.byFileAndIPPrefix.{file_name}.{ip_prefix}': 1,
+                f'data.byIPPrefix.{ip_prefix}': 1,
+                f'data.byFileAndIPPrefix.{file_name}.{ip_prefix}': 1,
                 # 用户指纹统计
-                f'downloads.byUser.{user_fingerprint}': 1,
-                f'downloads.byFileAndUser.{file_name}.{user_fingerprint}': 1,
+                f'data.byUser.{user_fingerprint}': 1,
+                f'data.byFileAndUser.{file_name}.{user_fingerprint}': 1,
                 # 组合维度统计
-                f'downloads.byFileAndSource.{file_name}.{source_page}': 1
+                f'data.byFileAndSource.{file_name}.{source_page}': 1
             },
             '$set': {
                 'system': system,
                 'date': current_date,
+                'type': track_type,
                 'lastUpdated': datetime.utcnow()
             },
             # 记录唯一用户数
             '$addToSet': {
-                'downloads.uniqueUsers': user_fingerprint,
-                f'downloads.byFileUniqueUsers.{file_name}': user_fingerprint,
-                f'downloads.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
+                'data.uniqueUsers': user_fingerprint,
+                f'data.byFileUniqueUsers.{file_name}': user_fingerprint,
+                f'data.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
             }
         }
     
-    return await _track_common(request, data, "下载", download_handler)
+    return await _track_common(request, data, "downloads", download_handler)
 
 
 @api_router.post("/track/event")
@@ -236,41 +280,42 @@ async def track_event(request: Request, data: dict):
         
         return {
             '$inc': {
-                'events.total': 1,
-                f'events.byType.{event_type}': 1,
-                f'events.byCategory.{event_category}': 1,
-                f'events.byAction.{event_action}': 1,
-                f'events.byLabel.{event_label}': 1,
-                f'events.bySelector.{selector}': 1,
-                f'events.byUrl.{url}': 1,
+                'data.total': 1,
+                f'data.byType.{event_type}': 1,
+                f'data.byCategory.{event_category}': 1,
+                f'data.byAction.{event_action}': 1,
+                f'data.byLabel.{event_label}': 1,
+                f'data.bySelector.{selector}': 1,
+                f'data.byUrl.{url}': 1,
                 # IP相关统计（使用IP前缀保护隐私）
-                f'events.byIPPrefix.{ip_prefix}': 1,
-                f'events.byCategoryAndIPPrefix.{event_category}.{ip_prefix}': 1,
-                f'events.byActionAndIPPrefix.{event_action}.{ip_prefix}': 1,
+                f'data.byIPPrefix.{ip_prefix}': 1,
+                f'data.byCategoryAndIPPrefix.{event_category}.{ip_prefix}': 1,
+                f'data.byActionAndIPPrefix.{event_action}.{ip_prefix}': 1,
                 # 用户指纹统计
-                f'events.byUser.{user_fingerprint}': 1,
-                f'events.byCategoryAndUser.{event_category}.{user_fingerprint}': 1,
-                f'events.byCategoryAndActionAndUser.{event_category}.{event_action}.{user_fingerprint}': 1,
+                f'data.byUser.{user_fingerprint}': 1,
+                f'data.byCategoryAndUser.{event_category}.{user_fingerprint}': 1,
+                f'data.byCategoryAndActionAndUser.{event_category}.{event_action}.{user_fingerprint}': 1,
                 # 组合维度统计
-                f'events.byCategoryAndAction.{event_category}.{event_action}': 1,
-                f'events.byCategoryAndLabel.{event_category}.{event_label}': 1,
-                f'events.byUrlAndAction.{url}.{event_action}': 1
+                f'data.byCategoryAndAction.{event_category}.{event_action}': 1,
+                f'data.byCategoryAndLabel.{event_category}.{event_label}': 1,
+                f'data.byUrlAndAction.{url}.{event_action}': 1
             },
             '$set': {
                 'system': system,
                 'date': current_date,
+                'type': track_type, 
                 'lastUpdated': datetime.utcnow()
             },
             # 记录唯一用户数（使用$addToSet确保每个用户只计数一次）
             '$addToSet': {
-                'events.uniqueUsers': user_fingerprint,
-                f'events.byCategoryUniqueUsers.{event_category}': user_fingerprint,
-                f'events.byActionUniqueUsers.{event_action}': user_fingerprint,
-                f'events.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
+                'data.uniqueUsers': user_fingerprint,
+                f'data.byCategoryUniqueUsers.{event_category}': user_fingerprint,
+                f'data.byActionUniqueUsers.{event_action}': user_fingerprint,
+                f'data.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
             }
         }
     
-    return await _track_common(request, data, "自定义事件", event_handler)
+    return await _track_common(request, data, "events", event_handler)
 
 
 @api_router.post("/track/duration")
@@ -287,48 +332,49 @@ async def track_duration(request: Request, data: dict):
         
         return {
             '$inc': {
-                'duration.total': duration,
-                'duration.count': 1,
-                f'duration.byUrl.{url}': duration,
-                f'duration.byUrl.count.{url}': 1,
-                f'duration.byBrowser.{browser}': duration,
-                f'duration.byBrowser.count.{browser}': 1,
-                f'duration.byOS.{os_name}': duration,
-                f'duration.byOS.count.{os_name}': 1,
-                f'duration.byDevice.{device}': duration,
-                f'duration.byDevice.count.{device}': 1,
+                'data.total': duration,
+                'data.count': 1,
+                f'data.byUrl.{url}': duration,
+                f'data.byUrl.count.{url}': 1,
+                f'data.byBrowser.{browser}': duration,
+                f'data.byBrowser.count.{browser}': 1,
+                f'data.byOS.{os_name}': duration,
+                f'data.byOS.count.{os_name}': 1,
+                f'data.byDevice.{device}': duration,
+                f'data.byDevice.count.{device}': 1,
                 # IP相关统计（使用IP前缀保护隐私）
-                f'duration.byIPPrefix.{ip_prefix}': duration,
-                f'duration.byIPPrefix.count.{ip_prefix}': 1,
-                f'duration.byUrlAndIPPrefix.{url}.{ip_prefix}': duration,
-                f'duration.byUrlAndIPPrefix.count.{url}.{ip_prefix}': 1,
+                f'data.byIPPrefix.{ip_prefix}': duration,
+                f'data.byIPPrefix.count.{ip_prefix}': 1,
+                f'data.byUrlAndIPPrefix.{url}.{ip_prefix}': duration,
+                f'data.byUrlAndIPPrefix.count.{url}.{ip_prefix}': 1,
                 # 用户指纹统计
-                f'duration.byUser.{user_fingerprint}': duration,
-                f'duration.byUser.count.{user_fingerprint}': 1,
-                f'duration.byUrlAndUser.{url}.{user_fingerprint}': duration,
-                f'duration.byUrlAndUser.count.{url}.{user_fingerprint}': 1,
+                f'data.byUser.{user_fingerprint}': duration,
+                f'data.byUser.count.{user_fingerprint}': 1,
+                f'data.byUrlAndUser.{url}.{user_fingerprint}': duration,
+                f'data.byUrlAndUser.count.{url}.{user_fingerprint}': 1,
                 # 组合维度统计
-                f'duration.byUrlAndBrowser.{url}.{browser}': duration,
-                f'duration.byUrlAndBrowser.count.{url}.{browser}': 1,
-                f'duration.byUrlAndDevice.{url}.{device}': duration,
-                f'duration.byUrlAndDevice.count.{url}.{device}': 1,
-                f'duration.byBrowserAndOS.{browser}.{os_name}': duration,
-                f'duration.byBrowserAndOS.count.{browser}.{os_name}': 1
+                f'data.byUrlAndBrowser.{url}.{browser}': duration,
+                f'data.byUrlAndBrowser.count.{url}.{browser}': 1,
+                f'data.byUrlAndDevice.{url}.{device}': duration,
+                f'data.byUrlAndDevice.count.{url}.{device}': 1,
+                f'data.byBrowserAndOS.{browser}.{os_name}': duration,
+                f'data.byBrowserAndOS.count.{browser}.{os_name}': 1
             },
             '$set': {
                 'system': system,
                 'date': current_date,
+                'type': track_type,
                 'lastUpdated': datetime.utcnow()
             },
             # 记录唯一用户数（使用$addToSet确保每个用户只计数一次）
             '$addToSet': {
-                'duration.uniqueUsers': user_fingerprint,
-                f'duration.byUrlUniqueUsers.{url}': user_fingerprint,
-                f'duration.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
+                'data.uniqueUsers': user_fingerprint,
+                f'data.byUrlUniqueUsers.{url}': user_fingerprint,
+                f'data.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
             }
         }
     
-    return await _track_common(request, data, "页面停留时长", duration_handler)
+    return await _track_common(request, data, "duration", duration_handler)
 
 
 def merge_nested_dicts(dict1, dict2):
@@ -338,57 +384,93 @@ def merge_nested_dicts(dict1, dict2):
     :param dict2: 第二个字典
     :return: 合并后的字典
     """
-    result = dict1.copy()
+    # 使用更高效的方式合并，避免不必要的复制
+    result = {}
+    
+    # 先复制dict1的内容
+    for key, value in dict1.items():
+        result[key] = value
 
+    # 合并dict2的内容
     for key, value in dict2.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            # 递归合并嵌套字典
-            result[key] = merge_nested_dicts(result[key], value)
-        elif key in result and isinstance(result[key], int) and isinstance(value, int):
-            # 相加数值
-            result[key] = result[key] + value
+        if key in result:
+            if isinstance(result[key], dict) and isinstance(value, dict):
+                # 递归合并嵌套字典
+                result[key] = merge_nested_dicts(result[key], value)
+            elif isinstance(result[key], int) and isinstance(value, int):
+                # 相加数值
+                result[key] = result[key] + value
+            else:
+                # 其他情况，直接使用新值
+                result[key] = value
         else:
-            # 其他情况，直接使用新值
+            # 键不存在，直接添加
             result[key] = value
 
     return result
 
 
-def get_top_entries(dictionary, limit=10):
+def get_top_entries(dictionary, limit=10, except_keys=None):
     """
     获取字典中值最大的前N个条目
     :param dictionary: 输入字典
     :param limit: 返回的条目数
+    :param except_keys: 需要排除的键列表
     :return: 包含前N个条目的字典
     """
     if not dictionary:
         return {}
 
-    # 处理嵌套字典的情况
-    def calculate_total_value(value):
-        """计算嵌套字典的总值或返回单个值"""
+    if except_keys is None:
+        except_keys = []
+
+    # 过滤掉需要排除的键
+    filtered_dict = {k: v for k, v in dictionary.items() if k not in except_keys}
+
+    if not filtered_dict:
+        return {}
+
+    # 优化：只在必要时计算嵌套字典总值
+    def get_value_score(value):
+        """获取值的分数（嵌套字典计算总和，其他返回原值）"""
         if isinstance(value, dict):
-            # 如果是嵌套字典，计算所有值的总和
-            return sum(calculate_total_value(v) for v in value.values())
+            total = 0
+            # 非递归方式计算嵌套字典总和，避免栈溢出
+            stack = list(value.values())
+            while stack:
+                item = stack.pop()
+                if isinstance(item, dict):
+                    stack.extend(item.values())
+                elif isinstance(item, int):
+                    total += item
+            return total
         elif isinstance(value, int):
-            # 如果是整数，直接返回
             return value
         else:
-            # 其他情况返回0
             return 0
 
-    # 对字典项按总值降序排序
-    sorted_items = sorted(dictionary.items(),
-                          key=lambda x: calculate_total_value(x[1]),
-                          reverse=True)
-    # 返回前limit个条目
-    return dict(sorted_items[:limit])
+    res_arr = filtered_dict
+    if len(filtered_dict) > limit:
+        # 对字典项按值降序排序
+        sorted_items = sorted(
+            filtered_dict.items.items(),
+            key=lambda x: get_value_score(x[1]),
+            reverse=True
+        )
+        # 返回前limit个条目
+        res_arr = sorted_items[:limit]
+    if except_keys:
+        for key in except_keys:
+            if key in dictionary:
+                res_arr[key] = dictionary[key]
+    return dict(res_arr)
 
 
-async def _stats_common(request: Request, system: str, start_date: Optional[str], end_date: Optional[str], limit: int, stats_type: str, result_initializer, unique_users_handler, final_result_handler):
+@lru_cache_with_ttl(maxsize=50, ttl=5)  # 缓存50个结果，过期时间5秒
+async def _stats_common(system: str, start_date: Optional[str], end_date: Optional[str], limit: int,
+                        stats_type: str, result_initializer, unique_users_handler, final_result_handler):
     """
     通用统计处理函数，处理重复的查询和聚合逻辑
-    :param request: 请求对象
     :param system: 系统名称
     :param start_date: 开始日期
     :param end_date: 结束日期
@@ -401,70 +483,142 @@ async def _stats_common(request: Request, system: str, start_date: Optional[str]
     """
     try:
         # 构建查询条件
-        query = {'system': system, stats_type: {'$exists': True}}
+        query = {'system': system}
 
         # 如果提供了日期范围，添加日期过滤条件
-        if start_date:
+        if start_date and end_date:
+            query['date'] = {'$gte': start_date, '$lte': end_date}
+        elif start_date:
             query['date'] = {'$gte': start_date}
-        if end_date:
-            if 'date' in query:
-                query['date']['$lte'] = end_date
-            else:
-                query['date'] = {'$lte': end_date}
+        elif end_date:
+            query['date'] = {'$lte': end_date}
 
         # 查询多个日期分片的数据，并按日期排序
-        stats_cursor = stats_collection.find(query, {'_id': 0, 'date': 1, stats_type: 1}).sort('date', 1)
+        # 更新查询条件，添加type字段
+        query['type'] = stats_type
+        
+        # 只投影需要的字段，减少数据传输
+        stats_cursor = stats_collection.find(
+            query,
+            {'_id': 0, 'date': 1, 'data': 1}
+        ).sort('date', 1)
 
         # 初始化聚合结果
         aggregated_stats = result_initializer()
         
         # 初始化趋势数据列表
         trend_data = []
+        
+        # 预计算需要聚合的字段列表，避免重复判断
+        merge_fields = [
+            key for key in aggregated_stats 
+            if key not in ('total', 'count', 'uniqueUsers') 
+            and not key.endswith('UniqueUsers')
+        ]
 
         # 聚合所有日期分片的数据，并收集趋势数据
-        for stats in stats_cursor:
-            if stats_type in stats:
-                stats_data = stats[stats_type]
-                date = stats['date']
+        async for stats in stats_cursor:
+            if 'data' not in stats:
+                continue
                 
-                # 收集当天的趋势数据
-                if stats_type == 'duration':
-                    # 停留时长统计的趋势数据包含总时长和会话数
-                    day_data = {
-                        'date': date,
-                        'total': stats_data.get('total', 0),
-                        'count': stats_data.get('count', 0)
+            stats_data = stats['data']
+            date = stats['date']
+            
+            # 收集当天的趋势数据（只创建必要的字段）
+            day_data = {'date': date}
+            if stats_type == 'duration':
+                # 停留时长统计的趋势数据包含总时长和会话数
+                day_data['total'] = stats_data.get('total', 0)
+                day_data['count'] = stats_data.get('count', 0)
+            else:
+                # 其他统计类型的趋势数据包含总数和独立用户数
+                day_data['total'] = stats_data.get('total', 0)
+                day_data['uniqueUsers'] = len(stats_data.get('uniqueUsers', []))
+            
+            # 添加按子类别收集的趋势数据
+            if stats_type == 'pageViews' and 'byUrl' in stats_data:
+                # 页面访问按URL收集趋势数据，包含访问次数和用户数
+                url_trend_data = {}
+                top_urls = get_top_entries(stats_data['byUrl'], limit)
+                for url, count in top_urls.items():
+                    # 获取该URL的用户数信息
+                    unique_users = len(stats_data.get('byUrlUniqueUsers', {}).get(url, []))
+                    url_trend_data[url] = {
+                        'count': count,
+                        'uniqueUsers': unique_users
                     }
-                else:
-                    # 其他统计类型的趋势数据包含总数和独立用户数
-                    day_data = {
-                        'date': date,
-                        'total': stats_data.get('total', 0),
-                        'uniqueUsers': len(stats_data.get('uniqueUsers', []))
+                day_data['byUrl'] = url_trend_data
+            elif stats_type == 'duration' and 'byUrl' in stats_data:
+                # 停留时长按URL收集趋势数据，包含总时长和会话数
+                url_trend_data = {}
+                top_urls = get_top_entries(stats_data['byUrl'], limit, except_keys=['count'])
+                for url, count in top_urls.items():
+                    if url == 'count':
+                        continue
+                    sessions = 1
+                    if 'count' in stats_data['byUrl'] and url in stats_data['byUrl']['count']:
+                        sessions = stats_data['byUrl']['count'][url]
+                    url_trend_data[url] = {
+                        'total': count,
+                        'count': sessions
                     }
-                trend_data.append(day_data)
+                day_data['byUrl'] = url_trend_data
+            elif stats_type == 'downloads' and 'byFile' in stats_data:
+                # 下载按文件收集趋势数据，包含下载次数和用户数
+                file_data = {}
+                # 收集每个文件的下载次数
+                for file, count in stats_data['byFile'].items():
+                    file_data[file] = {
+                        'count': count,
+                        'uniqueUsers': len(stats_data.get('byFileUniqueUsers', {}).get(file, []))
+                    }
+                # 按下载次数排序，取前limit个
+                sorted_files = sorted(file_data.items(), key=lambda x: x[1]['count'], reverse=True)[:limit]
+                day_data['byFile'] = {file: data for file, data in sorted_files}
+            elif stats_type == 'events' and 'byCategoryAndAction' in stats_data:
+                # 事件按类别+动作收集趋势数据，包含事件次数和用户数
+                event_data = {}
+                # 获取事件类别和动作数据
+                for category, actions in stats_data['byCategoryAndAction'].items():
+                    for action, count in actions.items():
+                        event_key = f"{category}.{action}"
+                        # 计算该事件的唯一用户数
+                        unique_users = 0
+                        if stats_data.get('byCategoryAndActionAndUser', {}).get(category, {}).get(action):
+                            unique_users = len(stats_data['byCategoryAndActionAndUser'][category][action])
+                        event_data[event_key] = {
+                            'count': count,
+                            'uniqueUsers': unique_users
+                        }
+                # 按事件次数排序，取前limit个
+                sorted_events = sorted(event_data.items(), key=lambda x: x[1]['count'], reverse=True)[:limit]
+                day_data['byCategoryAndAction'] = {event: data for event, data in sorted_events}
+            
+            trend_data.append(day_data)
 
-                # 聚合基本统计
-                aggregated_stats['total'] += stats_data.get('total', 0)
-                # 处理duration统计方法中的count字段
-                if 'count' in stats_data and 'count' in aggregated_stats:
-                    aggregated_stats['count'] += stats_data.get('count', 0)
+            # 聚合基本统计（避免重复查找）
+            total = stats_data.get('total', 0)
+            aggregated_stats['total'] += total
+            
+            # 处理duration统计方法中的count字段
+            if 'count' in stats_data and 'count' in aggregated_stats:
+                aggregated_stats['count'] += stats_data.get('count', 0)
 
-                # 聚合嵌套字典数据
-                # 动态聚合所有需要merge的嵌套字段
-                for key in aggregated_stats:
-                    if key != 'total' and key != 'count' and key != 'uniqueUsers' and not key.endswith('UniqueUsers'):
-                        aggregated_stats[key] = merge_nested_dicts(aggregated_stats[key], stats_data.get(key, {}))
-                        # 在聚合过程中应用limit限制，减少内存占用
-                        if key != 'byBrowserAndOsUniqueUsers':  # 特殊字段在finalize中处理
-                            aggregated_stats[key] = get_top_entries(aggregated_stats[key], limit)
+            # 聚合嵌套字典数据（使用预计算的字段列表）
+            for key in merge_fields:
+                if key in stats_data:
+                    aggregated_stats[key] = merge_nested_dicts(aggregated_stats[key], stats_data[key])
+                    # 在聚合过程中应用limit限制，减少内存占用
+                    if key != 'byBrowserAndOsUniqueUsers':  # 特殊字段在finalize中处理
+                        aggregated_stats[key] = get_top_entries(aggregated_stats[key], limit)
 
-                # 合并唯一用户集合
-                if 'uniqueUsers' in stats_data:
-                    aggregated_stats['uniqueUsers'].update(stats_data['uniqueUsers'])
+            # 合并唯一用户集合（只在存在时处理）
+            stats_unique_users = stats_data.get('uniqueUsers')
+            if stats_unique_users:
+                aggregated_stats['uniqueUsers'].update(stats_unique_users)
 
-                # 处理特定的唯一用户数据
-                unique_users_handler(aggregated_stats, stats_data, stats_type)
+            # 处理特定的唯一用户数据
+            unique_users_handler(aggregated_stats, stats_data, stats_type)
 
         # 将集合转换为列表，方便客户端处理
         aggregated_stats['uniqueUsers'] = list(aggregated_stats['uniqueUsers'])
@@ -476,7 +630,7 @@ async def _stats_common(request: Request, system: str, start_date: Optional[str]
         return final_result_handler(aggregated_stats, limit)
 
     except Exception as e:
-        logger.error(f"获取{stats_type}统计失败: {str(e)}")
+        logger.error(f"获取{stats_type}统计失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取{stats_type}统计失败: {str(e)}")
 
 
@@ -594,13 +748,12 @@ async def get_technology_stats(request: Request, system: str = "default",
     获取页面访问统计
     """
     return await _stats_common(
-        request, system, start_date, end_date, limit,
+        system, start_date, end_date, limit,
         "pageViews",
         _init_pageview_result,
         _handle_pageview_unique_users,
         _finalize_pageview_result
     )
-
 
 
 def _init_downloads_result():
@@ -685,7 +838,7 @@ async def get_download_stats(request: Request, system: str = "default",
     获取下载统计
     """
     return await _stats_common(
-        request, system, start_date, end_date, limit,
+        system, start_date, end_date, limit,
         "downloads",
         _init_downloads_result,
         _handle_downloads_unique_users,
@@ -802,7 +955,7 @@ async def get_event_stats(request: Request, system: str = "default",
     获取事件统计
     """
     return await _stats_common(
-        request, system, start_date, end_date, limit,
+        system, start_date, end_date, limit,
         "events",
         _init_events_result,
         _handle_events_unique_users,
@@ -848,19 +1001,17 @@ def _finalize_duration_result(aggregated_stats, limit):
     return {
         "totalDuration": aggregated_stats.get('total', 0),
         "totalSessions": aggregated_stats.get('count', 0),
-        "byUrl": get_top_entries(aggregated_stats.get('byUrl', {}), limit),
-        "byBrowser": get_top_entries(aggregated_stats.get('byBrowser', {}), limit),
-        "byOS": get_top_entries(aggregated_stats.get('byOS', {}), limit),
-        "byDevice": get_top_entries(aggregated_stats.get('byDevice', {}), limit),
-        "byIPPrefix": get_top_entries(aggregated_stats.get('byIPPrefix', {}), limit),
-        "byIPPrefix.count": get_top_entries(aggregated_stats.get('byIPPrefix.count', {}), limit),
-        "byUrlAndIPPrefix": get_top_entries(aggregated_stats.get('byUrlAndIPPrefix', {}), limit),
-        "byUrlAndIPPrefix.count": get_top_entries(aggregated_stats.get('byUrlAndIPPrefix.count', {}), limit),
-        "byUser": get_top_entries(aggregated_stats.get('byUser', {}), limit),
-        "byUrlAndUser": get_top_entries(aggregated_stats.get('byUrlAndUser', {}), limit),
-        "byUrlAndBrowser": get_top_entries(aggregated_stats.get('byUrlAndBrowser', {}), limit),
-        "byUrlAndDevice": get_top_entries(aggregated_stats.get('byUrlAndDevice', {}), limit),
-        "byBrowserAndOS": get_top_entries(aggregated_stats.get('byBrowserAndOS', {}), limit),
+        "byUrl": get_top_entries(aggregated_stats.get('byUrl', {}), limit, except_keys=['count']),
+        "byBrowser": get_top_entries(aggregated_stats.get('byBrowser', {}), limit, except_keys=['count']),
+        "byOS": get_top_entries(aggregated_stats.get('byOS', {}), limit, except_keys=['count']),
+        "byDevice": get_top_entries(aggregated_stats.get('byDevice', {}), limit, except_keys=['count']),
+        "byIPPrefix": get_top_entries(aggregated_stats.get('byIPPrefix', {}), limit, except_keys=['count']),
+        "byUrlAndIPPrefix": get_top_entries(aggregated_stats.get('byUrlAndIPPrefix', {}), limit, except_keys=['count']),
+        "byUser": get_top_entries(aggregated_stats.get('byUser', {}), limit, except_keys=['count']),
+        "byUrlAndUser": get_top_entries(aggregated_stats.get('byUrlAndUser', {}), limit, except_keys=['count']),
+        "byUrlAndBrowser": get_top_entries(aggregated_stats.get('byUrlAndBrowser', {}), limit, except_keys=['count']),
+        "byUrlAndDevice": get_top_entries(aggregated_stats.get('byUrlAndDevice', {}), limit, except_keys=['count']),
+        "byBrowserAndOS": get_top_entries(aggregated_stats.get('byBrowserAndOS', {}), limit, except_keys=['count']),
         "uniqueUsers": len(aggregated_stats.get('uniqueUsers', [])),
         "trendData": aggregated_stats.get('trendData', [])
     }
@@ -875,7 +1026,7 @@ async def get_duration_stats(request: Request, system: str = "default",
     获取停留时长统计
     """
     return await _stats_common(
-        request, system, start_date, end_date, limit,
+        system, start_date, end_date, limit,
         "duration",
         _init_duration_result,
         _handle_duration_unique_users,
@@ -913,8 +1064,6 @@ async def logout(request: Request, response: Response):
     return {"message": "Logout successful"}
 
 
-
-
 class ProtectedStaticFiles(StaticFiles):
     async def __call__(self, scope, receive, send) -> None:
         request = Request(scope, receive)
@@ -949,5 +1098,4 @@ app.mount("/", ProtectedStaticFiles(directory="public/monitor", html=True), name
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,5 +1,8 @@
 // 下载图表渲染相关函数
 
+// 模块级变量，用于存储下载趋势图表实例
+let downloadTrendChart;
+
 // 渲染下载图表
 function renderDownloadCharts(downloadData) {
     // 按文件下载图表
@@ -242,7 +245,7 @@ function renderDownloadCharts(downloadData) {
     }
 }
 
-// 渲染下载趋势图
+// 渲染下载趋势图（整合总趋势和文件趋势）
 function renderDownloadTrendChart(downloadData) {
     if (!downloadData || !downloadData.trendData) {
         console.error('无效的下载趋势数据');
@@ -251,90 +254,190 @@ function renderDownloadTrendChart(downloadData) {
 
     const ctx = document.getElementById('downloadTrendChart').getContext('2d');
     const trendData = downloadData.trendData;
+    const fileSelector = document.getElementById('fileSelector');
     
     // 准备数据
     const labels = trendData.map(item => item.date);
-    const totalData = trendData.map(item => item.total);
-    const uniqueUsersData = trendData.map(item => item.uniqueUsers);
-
-    // 销毁旧图表实例
-    if (downloadTrendChart && typeof downloadTrendChart.destroy === 'function') {
-        downloadTrendChart.destroy();
-    }
-
-    // 创建新图表
-    downloadTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: '总下载量',
-                    data: totalData,
-                    borderColor: '#4bb543',
-                    backgroundColor: 'rgba(75, 181, 67, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                },
-                {
-                    label: '下载用户数',
-                    data: uniqueUsersData,
-                    borderColor: '#9d4edd',
-                    backgroundColor: 'rgba(157, 78, 221, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
+    
+    // 收集所有文件的趋势数据，包含下载次数和用户数
+    const fileTrendMap = new Map(); // 存储每个文件的完整数据
+    const fileCountTrendMap = new Map(); // 仅存储下载次数，用于排序
+    
+    trendData.forEach(item => {
+        if (item.byFile) {
+            Object.entries(item.byFile).forEach(([file, data]) => {
+                // 初始化文件数据结构
+                if (!fileTrendMap.has(file)) {
+                    fileTrendMap.set(file, {
+                        countData: Array(labels.length).fill(0),
+                        userData: Array(labels.length).fill(0)
+                    });
                 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '数量'
-                    }
+                
+                const fileData = fileTrendMap.get(file);
+                const index = labels.indexOf(item.date);
+                if (index !== -1) {
+                    fileData.countData[index] = data.count;
+                    fileData.userData[index] = data.uniqueUsers;
                 }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y;
-                            }
-                            return label;
-                        }
-                    }
+                
+                // 更新用于排序的下载次数数据
+                if (!fileCountTrendMap.has(file)) {
+                    fileCountTrendMap.set(file, Array(labels.length).fill(0));
                 }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+                const countData = fileCountTrendMap.get(file);
+                if (index !== -1) {
+                    countData[index] = data.count;
+                }
+            });
+        }
+    });
+    
+    // 按总下载量排序文件
+    const sortedFiles = Array.from(fileCountTrendMap.entries())
+        .sort(([, a], [, b]) => {
+            const totalA = a.reduce((sum, val) => sum + val, 0);
+            const totalB = b.reduce((sum, val) => sum + val, 0);
+            return totalB - totalA;
+        });
+    
+    // 初始化下拉选择框
+    fileSelector.innerHTML = `
+        <option value="total">总趋势</option>
+    `;
+    
+    // 添加文件选项
+    sortedFiles.forEach(([file]) => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        fileSelector.appendChild(option);
+    });
+    
+    // 创建图表渲染函数
+    const renderChart = (selectedValue) => {
+        let datasets = [];
+        let chartTitle = '';
+        
+        // 根据选择的值获取对应的数据
+        let countData, userData;
+        if (selectedValue === 'total') {
+            // 总的趋势：显示所有文件的总下载次数和用户数
+            countData = trendData.map(item => item.total);
+            userData = trendData.map(item => item.uniqueUsers);
+            chartTitle = '总下载趋势';
+        } else {
+            // 特定文件趋势
+            const fileData = fileTrendMap.get(selectedValue);
+            if (fileData) {
+                countData = fileData.countData;
+                userData = fileData.userData;
+                chartTitle = `${selectedValue} 下载趋势`;
+            } else {
+                // 如果文件数据不存在，使用空数组
+                countData = [];
+                userData = [];
             }
         }
+        
+        // 构建datasets（使用统一的配置，只有数据来源不同）
+        datasets = [
+            {
+                label: '下载次数',
+                data: countData,
+                borderColor: '#4bb543',
+                backgroundColor: 'rgba(75, 181, 67, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: '下载用户数',
+                data: userData,
+                borderColor: '#9d4edd',
+                backgroundColor: 'rgba(157, 78, 221, 0.1)',
+                tension: 0.4,
+                fill: true
+            }
+        ];
+
+        // 销毁旧图表实例
+        if (downloadTrendChart && typeof downloadTrendChart.destroy === 'function') {
+            downloadTrendChart.destroy();
+        }
+
+        // 创建新图表
+        downloadTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '日期'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '数量'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            maxWidth: 250,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: chartTitle
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    };
+    
+    // 初始渲染
+    renderChart('total');
+    
+    // 添加下拉选择框事件监听
+    fileSelector.addEventListener('change', (e) => {
+        renderChart(e.target.value);
     });
 }

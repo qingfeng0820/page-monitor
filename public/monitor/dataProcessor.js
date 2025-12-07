@@ -82,6 +82,13 @@ async function loadData() {
         if (startDate) queryParams.append('start_date', startDate);
         if (endDate) queryParams.append('end_date', endDate);
         if (limit) queryParams.append('limit', limit);
+
+        // 获取system参数
+        const urlParams = new URLSearchParams(window.location.search)
+        const systemParam = urlParams.get('system')
+        if (systemParam) { 
+            queryParams.append('system', systemParam);
+        }
         
         // 构建API URL（使用相对路径，确保在Docker容器内正常工作）
         const apiBaseUrl = '/api/stats';
@@ -89,7 +96,7 @@ async function loadData() {
         const downloadUrl = `${apiBaseUrl}/downloads?${queryParams.toString()}`;
         const eventUrl = `${apiBaseUrl}/events?${queryParams.toString()}`;
         const durationUrl = `${apiBaseUrl}/duration?${queryParams.toString()}`;
-        
+
         // 并行获取页面访问、下载、事件和停留时长数据
         const [pageviewResponse, downloadResponse, eventResponse, durationResponse] = await Promise.all([
             fetch(pageviewUrl),

@@ -1,6 +1,8 @@
-// 页面访问图表渲染相关函数
-
 // 渲染页面访问图表
+
+// 模块级变量，用于存储页面访问趋势图表实例
+let pageviewTrendChart;
+
 function renderPageviewCharts(pageviewData, durationData) {
     // URL访问图表 - 修改tooltip配置
     const urlCtx = document.getElementById('urlChart').getContext('2d');
@@ -615,129 +617,288 @@ function renderPageviewTrendChart(pageviewData, durationData) {
     const ctx = document.getElementById('pageviewTrendChart').getContext('2d');
     const pageviewTrendData = pageviewData.trendData;
     const durationTrendData = durationData ? durationData.trendData : [];
+    const urlSelector = document.getElementById('pageviewUrlSelect');
     
     // 准备数据
     const labels = pageviewTrendData.map(item => item.date);
-    const totalData = pageviewTrendData.map(item => item.total);
-    const uniqueUsersData = pageviewTrendData.map(item => item.uniqueUsers);
     
-    // 计算每天的平均停留时间
-    // 创建日期到停留时长数据的映射，便于快速查找
-    const durationMap = new Map();
-    durationTrendData.forEach(durationItem => {
-        durationMap.set(durationItem.date, durationItem);
+    // 收集所有URL的趋势数据，包含访问次数和用户数
+    const urlTrendDataMap = new Map(); // 存储每个URL的完整数据
+    const urlCountMap = new Map(); // 仅存储访问次数，用于排序
+    
+    // 收集所有URL
+    const urlSet = new Set();
+    pageviewTrendData.forEach(item => {
+        if (item.byUrl) {
+            Object.keys(item.byUrl).forEach(url => {
+                urlSet.add(url);
+                // 更新用于排序的总访问次数
+                if (item.byUrl[url].count) {
+                    const currentCount = urlCountMap.get(url) || 0;
+                    urlCountMap.set(url, currentCount + item.byUrl[url].count);
+                }
+            });
+        }
     });
     
-    // 对每个页面访问日期，查找对应的停留时长数据
-    const avgDurationData = pageviewTrendData.map(pageviewItem => {
-        const date = pageviewItem.date;
-        const durationItem = durationMap.get(date);
+    // 初始化URL数据结构
+    urlSet.forEach(url => {
+        urlTrendDataMap.set(url, {
+            countData: Array(labels.length).fill(0),
+            userData: Array(labels.length).fill(0)
+        });
+    });
+    
+    // 填充URL趋势数据
+    pageviewTrendData.forEach(item => {
+        if (item.byUrl) {
+            Object.entries(item.byUrl).forEach(([url, data]) => {
+                if (urlTrendDataMap.has(url)) {
+                    const urlData = urlTrendDataMap.get(url);
+                    const index = labels.indexOf(item.date);
+                    if (index !== -1) {
+                        // 确保数据是数字
+                        const count = typeof data === 'number' ? data : (data.count || 0);
+                        const users = (typeof data === 'object' && data !== null) ? (data.uniqueUsers || 0) : 0;
+                        
+                        urlData.countData[index] = count;
+                        urlData.userData[index] = users;
+                    }
+                }
+            });
+        }
+    });
+    
+    // 初始化URL选择框
+    if (urlSelector) {
+        // 清空现有选项
+        urlSelector.innerHTML = '<option value="overall">总趋势</option>';
         
-        if (durationItem && durationItem.count > 0) {
-            return parseFloat((durationItem.total / durationItem.count).toFixed(2));
-        }
-        return 0;
-    });
-
-    // 销毁旧图表实例
-    if (pageviewTrendChart && typeof pageviewTrendChart.destroy === 'function') {
-        pageviewTrendChart.destroy();
+        // 按访问次数排序URL
+        const sortedUrls = Array.from(urlCountMap.entries())
+            .sort(([, a], [, b]) => b - a)
+            .map(([url]) => url);
+        
+        // 添加URL选项
+        sortedUrls.forEach(url => {
+            const option = document.createElement('option');
+            option.value = url;
+            option.textContent = url.length > 50 ? url.substring(0, 50) + '...' : url;
+            option.title = url; // 添加title属性，用于显示完整URL的tooltip
+            urlSelector.appendChild(option);
+        });
     }
-
-    // 创建新图表
-    pageviewTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: '总访问量',
-                    data: totalData,
-                    borderColor: '#4361ee',
-                    backgroundColor: 'rgba(67, 97, 238, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                },
-                {
-                    label: '浏览用户数',
-                    data: uniqueUsersData,
-                    borderColor: '#f72585',
-                    backgroundColor: 'rgba(247, 37, 133, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                },
-                {
-                    label: '平均停留时间(秒)',
-                    data: avgDurationData,
-                    borderColor: '#4cc9f0',
-                    backgroundColor: 'rgba(76, 201, 240, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y1' // 使用第二个Y轴
+    
+    // 创建图表渲染函数
+    const renderChart = (selectedUrl) => {
+        let datasets = [];
+        
+        // 根据选择的URL获取对应的数据
+        let totalData, uniqueUsersData, avgDurationData;
+        let chartTitle = '';
+        
+        if (selectedUrl === 'overall') {
+            // 总趋势图
+            totalData = pageviewTrendData.map(item => item.total);
+            uniqueUsersData = pageviewTrendData.map(item => item.uniqueUsers);
+            chartTitle = '总访问趋势';
+            
+            // 计算每天的平均停留时间
+            // 创建日期到停留时长数据的映射，便于快速查找
+            const durationMap = new Map();
+            durationTrendData.forEach(durationItem => {
+                durationMap.set(durationItem.date, durationItem);
+            });
+            
+            // 对每个页面访问日期，查找对应的停留时长数据
+            avgDurationData = pageviewTrendData.map(pageviewItem => {
+                const date = pageviewItem.date;
+                const durationItem = durationMap.get(date);
+                
+                if (durationItem && durationItem.count > 0) {
+                    return parseFloat((durationItem.total / durationItem.count).toFixed(2));
                 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '数量'
-                    }
-                },
-                y1: {
-                    beginAtZero: true,
-                    position: 'right',
-                    grid: {
-                        drawOnChartArea: false
-                    },
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '平均停留时间(秒)'
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y;
-                            }
-                            return label;
-                        }
-                    }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+                return 0;
+            });
+        } else {
+            // 单个URL趋势图
+            if (urlTrendDataMap.has(selectedUrl)) {
+                const urlData = urlTrendDataMap.get(selectedUrl);
+                totalData = urlData.countData;
+                uniqueUsersData = urlData.userData;
+                // 对长URL进行省略处理
+                const truncatedUrl = selectedUrl.length > 30 ? selectedUrl.substring(0, 30) + '...' : selectedUrl;
+                chartTitle = `${truncatedUrl} 访问趋势`;
+            } else {
+                // 如果找不到URL数据，默认为总趋势
+                totalData = pageviewTrendData.map(item => item.total);
+                uniqueUsersData = pageviewTrendData.map(item => item.uniqueUsers);
+                chartTitle = '总访问趋势';
             }
+            
+            // 计算单个URL每天的平均停留时间
+            const durationMap = new Map();
+            durationTrendData.forEach(durationItem => {
+                durationMap.set(durationItem.date, durationItem);
+            });
+            
+            // 对每个页面访问日期，查找对应的该URL的停留时长数据
+            avgDurationData = pageviewTrendData.map(pageviewItem => {
+                const date = pageviewItem.date;
+                const durationItem = durationMap.get(date);
+                
+                if (durationItem && durationItem.byUrl && durationItem.byUrl[selectedUrl]) {
+                    const urlDuration = durationItem.byUrl[selectedUrl];
+                    if (urlDuration.count > 0) {
+                        return parseFloat((urlDuration.total / urlDuration.count).toFixed(2));
+                    }
+                }
+                return 0;
+            });
         }
-    });
+        
+        // 构建基础数据集（访问次数和浏览用户数）
+        datasets = [
+            {
+                label: '访问次数',
+                data: totalData,
+                borderColor: '#4361ee',
+                backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y'
+            },
+            {
+                label: '浏览用户数',
+                data: uniqueUsersData,
+                borderColor: '#f72585',
+                backgroundColor: 'rgba(247, 37, 133, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y'
+            }
+        ];
+        
+        // 如果有平均停留时间数据，添加到数据集中
+        if (avgDurationData) {
+            datasets.push({
+                label: '平均停留时间(秒)',
+                data: avgDurationData,
+                borderColor: '#4cc9f0',
+                backgroundColor: 'rgba(76, 201, 240, 0.1)',
+                tension: 0.4,
+                fill: true,
+                yAxisID: 'y1' // 使用第二个Y轴
+            });
+        }
+        
+        // 销毁旧图表实例
+        if (pageviewTrendChart && typeof pageviewTrendChart.destroy === 'function') {
+            pageviewTrendChart.destroy();
+        }
+        
+        // 创建新图表
+        pageviewTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        bottom: 20 // 增加底部内边距，确保横坐标有足够空间显示
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '日期'
+                        },
+                        ticks: {
+                            maxRotation: 0,
+                            minRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '数量'
+                        }
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        position: 'right',
+                        grid: {
+                            drawOnChartArea: false
+                        },
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '平均停留时间(秒)'
+                        },
+                        // 只有当没有平均停留时间数据时才隐藏第二个Y轴
+                        hidden: !avgDurationData
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            title: function(context) {
+                                // 在tooltip中显示完整的URL作为标题
+                                return selectedUrl;
+                            },
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: chartTitle
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    };
+    
+    // 初始渲染总趋势图
+    renderChart('overall');
+    
+    // 添加选择事件监听器
+    if (urlSelector) {
+        // 先移除旧的事件监听器
+        const newUrlSelector = urlSelector.cloneNode(true);
+        urlSelector.parentNode.replaceChild(newUrlSelector, urlSelector);
+        
+        // 添加新的事件监听器
+        newUrlSelector.addEventListener('change', function() {
+            const selectedUrl = this.value;
+            renderChart(selectedUrl);
+        });
+    }
 }

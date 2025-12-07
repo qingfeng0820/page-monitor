@@ -316,90 +316,183 @@ function renderEventTrendChart(eventData) {
 
     const ctx = document.getElementById('eventTrendChart').getContext('2d');
     const trendData = eventData.trendData;
+    const selector = document.getElementById('eventTrendSelect');
     
-    // 准备数据
+    // 准备日期标签
     const labels = trendData.map(item => item.date);
-    const totalData = trendData.map(item => item.total);
-    const uniqueUsersData = trendData.map(item => item.uniqueUsers);
-
-    // 销毁旧图表实例
-    if (eventTrendChart && typeof eventTrendChart.destroy === 'function') {
-        eventTrendChart.destroy();
-    }
-
-    // 创建新图表
-    eventTrendChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: '总事件数',
-                    data: totalData,
-                    borderColor: '#4361ee',
-                    backgroundColor: 'rgba(67, 97, 238, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
-                },
-                {
-                    label: '用户数',
-                    data: uniqueUsersData,
-                    borderColor: '#f72585',
-                    backgroundColor: 'rgba(247, 37, 133, 0.1)',
-                    tension: 0.4,
-                    fill: true,
-                    yAxisID: 'y'
+    
+    // 构建事件类型+动作的数据映射
+    const eventTypeActionMap = new Map();
+    const eventCountMap = new Map();
+    
+    // 收集所有事件类型+动作及其数据
+    trendData.forEach(item => {
+        if (item.byCategoryAndAction) {
+            Object.entries(item.byCategoryAndAction).forEach(([eventKey, eventInfo]) => {
+                if (!eventTypeActionMap.has(eventKey)) {
+                    eventTypeActionMap.set(eventKey, {
+                        countData: Array(trendData.length).fill(0),
+                        userData: Array(trendData.length).fill(0)
+                    });
                 }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                x: {
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '日期'
-                    }
-                },
-                y: {
-                    beginAtZero: true,
-                    display: true,
-                    title: {
-                        display: true,
-                        text: '数量'
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.dataset.label || '';
-                            if (label) {
-                                label += ': ';
-                            }
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y;
-                            }
-                            return label;
-                        }
-                    }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            }
+                
+                const eventData = eventTypeActionMap.get(eventKey);
+                const index = trendData.indexOf(item);
+                eventData.countData[index] = eventInfo.count;
+                eventData.userData[index] = eventInfo.uniqueUsers;
+                
+                // 更新事件总计数
+                eventCountMap.set(eventKey, (eventCountMap.get(eventKey) || 0) + eventInfo.count);
+            });
         }
     });
+    
+    // 初始化事件选择器
+    if (selector) {
+        // 清空现有选项
+        selector.innerHTML = '<option value="overall">总趋势</option>';
+        
+        // 按事件次数排序
+        const sortedEvents = Array.from(eventCountMap.entries())
+            .sort(([, a], [, b]) => b - a)
+            .map(([eventKey]) => eventKey);
+        
+        // 添加事件类型+动作选项
+        sortedEvents.forEach(eventKey => {
+            const option = document.createElement('option');
+            option.value = eventKey;
+            option.textContent = eventKey.length > 50 ? eventKey.substring(0, 50) + '...' : eventKey;
+            option.title = eventKey; // 添加title属性，用于显示完整事件类型+动作的tooltip
+            selector.appendChild(option);
+        });
+    }
+    
+    // 创建图表渲染函数
+    const renderChart = (selectedEvent) => {
+        let totalData, uniqueUsersData;
+        let chartTitle = '';
+        
+        if (selectedEvent === 'overall') {
+            // 总趋势图
+            totalData = trendData.map(item => item.total);
+            uniqueUsersData = trendData.map(item => item.uniqueUsers);
+            chartTitle = '总事件趋势';
+        } else {
+            // 单个事件类型+动作趋势图
+            if (eventTypeActionMap.has(selectedEvent)) {
+                const eventData = eventTypeActionMap.get(selectedEvent);
+                totalData = eventData.countData;
+                uniqueUsersData = eventData.userData;
+                // 对长事件类型+动作进行省略处理
+                const truncatedEvent = selectedEvent.length > 30 ? selectedEvent.substring(0, 30) + '...' : selectedEvent;
+                chartTitle = `${truncatedEvent} 趋势`;
+            } else {
+                // 如果找不到事件数据，默认为总趋势
+                totalData = trendData.map(item => item.total);
+                uniqueUsersData = trendData.map(item => item.uniqueUsers);
+                chartTitle = '总事件趋势';
+            }
+        }
+        
+        // 销毁旧图表实例
+        if (eventTrendChart && typeof eventTrendChart.destroy === 'function') {
+            eventTrendChart.destroy();
+        }
+        
+        // 创建新图表
+        eventTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '事件数',
+                        data: totalData,
+                        borderColor: '#4361ee',
+                        backgroundColor: 'rgba(67, 97, 238, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: '用户数',
+                        data: uniqueUsersData,
+                        borderColor: '#f72585',
+                        backgroundColor: 'rgba(247, 37, 133, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '日期'
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        display: true,
+                        title: {
+                            display: true,
+                            text: '数量'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: true,
+                        text: chartTitle
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                if (selectedEvent !== 'overall') {
+                                    return selectedEvent;
+                                }
+                                return tooltipItems[0].label;
+                            },
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y;
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    axis: 'x',
+                    intersect: false
+                }
+            }
+        });
+    };
+    
+    // 初始渲染总趋势图
+    renderChart('overall');
+    
+    // 绑定选择器变化事件
+    if (selector) {
+        selector.addEventListener('change', (e) => {
+            renderChart(e.target.value);
+        });
+    }
 }
