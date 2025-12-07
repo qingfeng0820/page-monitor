@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>页面访问与下载监控面板</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 576 512'%3E%3Cpath fill='%234a90e2' d='M560 160H160v352h400V160zM128 0C57.3 0 0 57.3 0 128v352c0 70.7 57.3 128 128 128h448c70.7 0 128-57.3 128-128V128c0-70.7-57.3-128-128-128H128zm384 400H160V128h352v352zM240 240l64 96 96-128-72-64-112 144-72-64 136-144z'/%3E%3C/svg%3E" type="image/svg+xml">
+    <script src="chart.js"></script>
+    <link rel="stylesheet" href="fontawesome.css">
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1><i class="fas fa-chart-line"></i> 页面访问与下载监控面板</h1>
+                <div class="subtitle">实时监控页面访问情况和下载统计</div>
+            </div>
+            <div class="header-controls">
+                <div class="date-range-selector">
+                    <div class="date-range-selector-header">
+                        <label for="presetRange">时间范围:</label>
+                        <select id="presetRange">
+                             <option value="0">当天</option>
+                            <option value="7">最近7天</option>
+                            <option value="30" selected>最近30天</option>
+                            <option value="90">最近90天</option>
+                            <option value="180">最近180天</option>
+                            <option value="365">最近365天</option>
+                            <option value="custom">自定义范围</option>
+                        </select>
+                        
+                        <label for="resultLimit">图表Top数:</label>
+                        <select id="resultLimit">
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="custom-date-range">
+                        <input type="date" id="startDate">
+                        <span>至</span>
+                        <input type="date" id="endDate">
+                    </div>
+                </div>
+                <button class="refresh-btn" id="refreshBtn">
+                    <i class="fas fa-sync-alt"></i> 刷新数据
+                </button>
+                <button class="logout-btn" id="logoutBtn" title="登出">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </header>
+        
+        <div class="stats-overview">
+            <div class="stat-card">
+                <div class="stat-icon pageview-icon">
+                    <i class="fas fa-eye"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>总页面访问量</h3>
+                    <div class="stat-value" id="totalViews">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon download-icon">
+                    <i class="fas fa-download"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>总下载次数</h3>
+                    <div class="stat-value" id="totalDownloads">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: var(--accent-color);">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>总事件数</h3>
+                    <div class="stat-value" id="totalEvents">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #9d4edd;">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>浏览用户数</h3>
+                    <div class="stat-value" id="uniqueUsers">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #f72585;">
+                    <i class="fas fa-network-wired"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>IP地址段数</h3>
+                    <div class="stat-value" id="ipAddresses">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon browser-icon">
+                    <i class="fas fa-globe"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>浏览器类型</h3>
+                    <div class="stat-value" id="browserTypes">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon os-icon">
+                    <i class="fas fa-laptop"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>操作系统</h3>
+                    <div class="stat-value" id="osTypes">0</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #4cc9f0;">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-info">
+                    <h3>平均页面停留时间</h3>
+                    <div class="stat-value" id="avgDuration">0秒</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="dashboard">
+            <div id="pageview-card" class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-desktop"></i> 页面访问分析</h2>
+                    <div class="card-controls">
+                        <button class="card-control-btn maximize-btn" data-card="pageview-card">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="dimension-tabs">
+                    <div class="tab active" data-tab="urls"><i class="fas fa-link"></i> 按URL</div>
+                    <div class="tab" data-tab="browsers"><i class="fas fa-globe"></i> 按浏览器</div>
+                    <div class="tab" data-tab="os"><i class="fas fa-laptop"></i> 按操作系统</div>
+                    <div class="tab" data-tab="devices"><i class="fas fa-mobile-alt"></i> 按设备</div>
+                    <div class="tab" data-tab="users"><i class="fas fa-user"></i> 按用户</div>
+                    <div class="tab" data-tab="ips"><i class="fas fa-network-wired"></i> 按IP段</div>
+                    <div class="tab" data-tab="combinations"><i class="fas fa-project-diagram"></i> 组合分析</div>
+                    <div class="tab" data-tab="trend"><i class="fas fa-chart-line"></i> 趋势分析</div>
+                </div>
+                
+                <div id="urls" class="dimension-content active">
+                    <div class="chart-container">
+                        <canvas id="urlChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="browsers" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="browserChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="os" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="osChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="devices" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="deviceChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="users" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="userChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="ips" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="ipChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="combinations" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="combinationChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="trend" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="pageviewTrendChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>页面URL</th>
+                                <th>平均停留时间</th>
+                                <th>访问次数</th>
+                                <th>用户数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pageViewTable">
+                            <!-- 页面访问数据将在这里动态填充 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div id="download-card" class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-download"></i> 下载分析</h2>
+                    <div class="card-controls">
+                        <button class="card-control-btn maximize-btn" data-card="download-card">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="dimension-tabs">
+                    <div class="tab active" data-tab="downloadFiles"><i class="fas fa-file"></i> 按文件</div>
+                    <div class="tab" data-tab="downloadSources"><i class="fas fa-compass"></i> 按来源页面</div>
+                    <div class="tab" data-tab="downloadUsers"><i class="fas fa-user"></i> 按用户</div>
+                    <div class="tab" data-tab="downloadIPs"><i class="fas fa-network-wired"></i> 按IP段</div>
+                    <div class="tab" data-tab="downloadTrend"><i class="fas fa-chart-line"></i> 趋势分析</div>
+                </div>
+                
+                <div id="downloadFiles" class="dimension-content active">
+                    <div class="chart-container">
+                        <canvas id="downloadFileChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="downloadSources" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="downloadSourceChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="downloadUsers" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="downloadUserChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="downloadIPs" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="downloadIpChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="downloadTrend" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="downloadTrendChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>文件名</th>
+                                <th>来源页面</th>
+                                <th>下载次数</th>
+                                <th>用户数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="downloadTable">
+                            <!-- 下载数据将在这里动态填充 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="event-card" class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-bolt"></i> 事件分析</h2>
+                    <div class="card-controls">
+                        <button class="card-control-btn maximize-btn" data-card="event-card">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="dimension-tabs">
+                    <div class="tab active" data-tab="eventTypes"><i class="fas fa-list"></i> 按事件类型</div>
+                    <div class="tab" data-tab="eventCategories"><i class="fas fa-layer-group"></i> 按事件类别</div>
+                    <div class="tab" data-tab="eventActions"><i class="fas fa-play"></i> 按事件动作</div>
+                    <div class="tab" data-tab="eventLabels"><i class="fas fa-tag"></i> 按事件标签</div>
+                    <div class="tab" data-tab="eventSelectors"><i class="fas fa-code"></i> 按选择器</div>
+                    <div class="tab" data-tab="eventUsers"><i class="fas fa-user"></i> 按用户</div>
+                    <div class="tab" data-tab="eventIPs"><i class="fas fa-network-wired"></i> 按IP段</div>
+                    <div class="tab" data-tab="eventCombinations"><i class="fas fa-project-diagram"></i> 组合分析</div>
+                    <div class="tab" data-tab="eventTrend"><i class="fas fa-chart-line"></i> 趋势分析</div>
+                </div>
+                
+                <div id="eventTypes" class="dimension-content active">
+                    <div class="chart-container">
+                        <canvas id="eventTypeChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventCategories" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventCategoryChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventActions" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventActionChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventLabels" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventLabelChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventSelectors" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventSelectorChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventUsers" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventUserChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventIPs" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventIpChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventCombinations" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventCombinationChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="eventTrend" class="dimension-content">
+                    <div class="chart-container">
+                        <canvas id="eventTrendChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>事件类别</th>
+                                <th>事件动作</th>
+                                <th>事件数量</th> 
+                                <th>用户数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventTable">
+                            <!-- 事件数据将在这里动态填充 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+        
+        <footer>
+            <p>页面访问与下载监控系统 &copy; 2025 | 最后更新: <span id="lastUpdate">-</span></p>
+        </footer>
+    </div>
+    <!-- 外部JavaScript文件引用 -->
+<!-- 外部JavaScript文件引用 -->
+    <script src="pageViewCharts.js"></script>
+    <script src="downloadsCharts.js"></script>
+    <script src="eventCharts.js"></script>
+    <script src="dataProcessor.js"></script>
+    <script src="ui.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>

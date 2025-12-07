@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 页面监控系统</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 576 512'%3E%3Cpath fill='%234a90e2' d='M560 160H160v352h400V160zM128 0C57.3 0 0 57.3 0 128v352c0 70.7 57.3 128 128 128h448c70.7 0 128-57.3 128-128V128c0-70.7-57.3-128-128-128H128zm384 400H160V128h352v352zM240 240l64 96 96-128-72-64-112 144-72-64 136-144z'/%3E%3C/svg%3E" type="image/svg+xml">
+    <script src="chart.js"></script>
+    <link rel="stylesheet" href="fontawesome.css">
+    <link rel="stylesheet" href="index.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--card-shadow);
+        }
+        .login-title {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 2rem;
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .form-group label {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        .form-group input {
+            padding: 0.75rem;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+        }
+        .login-btn {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 0.75rem;
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+        .error-message {
+            color: var(--danger-color);
+            text-align: center;
+            padding: 0.75rem;
+            background: rgba(220, 53, 69, 0.1);
+            border-radius: var(--border-radius);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2 class="login-title">
+            <i class="fas fa-chart-line"></i> 页面监控系统
+        </h2>
+        <div id="errorMessage" class="error-message"></div>
+        <form id="loginForm" class="login-form">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+            </div>
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="login-btn">
+                <i class="fas fa-sign-in-alt"></i> 登录
+            </button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('errorMessage');
+            
+            errorMessage.style.display = 'none';
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'username': username,
+                        'password': password
+                    })
+                });
+                
+                if (response.ok) {
+                    // 登录成功，跳转到首页
+                    const urlParams = new URLSearchParams(window.location.search)
+                    const redirectUri = urlParams.get('url')
+                    if (redirectUri) {
+                        window.location.href = redirectUri
+                    } else {
+                        window.location.href = '/'
+                    }
+                } else {
+                    const data = await response.json();
+                    errorMessage.textContent = data.detail || '登录失败';
+                    errorMessage.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                errorMessage.textContent = '网络错误，请稍后重试';
+                errorMessage.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

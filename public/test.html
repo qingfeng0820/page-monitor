@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PageMonitor 测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button, .download-link {
+            background: #007cba;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px;
+        }
+        button:hover, .download-link:hover {
+            background: #005a87;
+        }
+        .status {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+
+     <!-- <script src="http://192.168.6.34:8000/public/pagemonitor.min.js" data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script> -->
+	<script src="pagemonitor.js" data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script>
+</head>
+<body>
+    <h1>PageMonitor 测试页面</h1>
+    
+    <div class="section">
+        <h2>页面访问测试</h2>
+        <p>页面加载时自动发送页面访问记录</p>
+        <button onclick="manualTrack()">手动触发页面访问跟踪</button>
+        <button onclick="changeUrl()">模拟SPA路由变化</button>
+    </div>
+
+    <div class="section">
+        <h2>下载链接测试</h2>
+        <p>点击以下链接测试下载跟踪：</p>
+        <a href="/api/test.pdf" class="download-link">PDF文档</a>
+        <a href="/api/package.zip" class="download-link">ZIP压缩包</a>
+        <a href="/api/software.exe" class="download-link">EXE程序</a>
+        <a href="/api/data.csv" download="report.csv" class="download-link">CSV报告 (带download属性)</a>
+    </div>
+
+    <div class="section">
+        <h2>监控状态</h2>
+        <div id="status" class="status">点击按钮查看状态...</div>
+        <button onclick="showStatus()">显示PageMonitor状态</button>
+        <button onclick="clearPending()">清除待发送数据</button>
+    </div>
+
+    <div class="section">
+        <h2>自定义事件测试</h2>
+        <p>点击以下按钮测试自定义事件跟踪：</p>
+        <button class="custom-event-btn">自定义事件按钮1</button>
+        <button class="custom-event-btn">自定义事件按钮2</button>
+        
+        <h3>产品列表（点击产品项测试）</h3>
+        <div class="product-item">
+            <h4>产品A</h4>
+            <p>这是产品A的描述</p>
+        </div>
+        <div class="product-item">
+            <h4>产品B</h4>
+            <p>这是产品B的描述</p>
+        </div>
+    </div>
+
+    <script>
+
+        let pageMonitor;
+
+        // 等待页面完全加载后再检查实例
+        window.addEventListener('load', function() {
+            if (!window.pageMonitorInstance) {
+                console.error('PageMonitor自动初始化失败，请检查配置和脚本加载！');
+            } else {
+                pageMonitor = window.pageMonitorInstance;
+                console.log('PageMonitor自动初始化成功');
+                showStatus();
+            }
+        });
+        
+        // 测试函数
+        function manualTrack() {
+            pageMonitor.trackPageView();
+            alert('手动触发页面访问跟踪！查看控制台了解详情');
+        }
+
+        function changeUrl() {
+            const newUrl = window.location.href + '?spa=' + Date.now();
+            const newTitle = 'SPA页面 - ' + new Date().toLocaleTimeString();
+            pageMonitor.updateCurrentUrl(newUrl, newTitle);
+            alert('模拟SPA路由变化！查看控制台了解详情');
+        }
+
+        function showStatus() {
+            const status = pageMonitor.getStatus();
+            document.getElementById('status').textContent = JSON.stringify(status, null, 2);
+        }
+
+        function clearPending() {
+            localStorage.removeItem('pending_tracking_pageview');
+            localStorage.removeItem('pending_tracking_download');
+            localStorage.removeItem('pending_tracking_event');
+            alert('待发送数据已清除！');
+            showStatus();
+        }
+    </script>
+</body>
+</html>
