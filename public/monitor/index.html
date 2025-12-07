@@ -155,6 +155,7 @@
                     <div class="tab" data-tab="users"><i class="fas fa-user"></i> 按用户</div>
                     <div class="tab" data-tab="ips"><i class="fas fa-network-wired"></i> 按IP段</div>
                     <div class="tab" data-tab="combinations"><i class="fas fa-project-diagram"></i> 组合分析</div>
+                    <div class="tab" data-tab="sources"><i class="fas fa-compass"></i> 按来源页面</div>
                     <div class="tab" data-tab="trend"><i class="fas fa-chart-line"></i> 趋势分析</div>
                 </div>
                 
@@ -197,6 +198,18 @@
                 <div id="combinations" class="dimension-content">
                     <div class="chart-container">
                         <canvas id="combinationChart"></canvas>
+                    </div>
+                </div>
+                
+                <div id="sources" class="dimension-content">
+                    <div class="chart-container">
+                        <div style="margin-bottom: 1rem;">
+                            <label for="urlSourceUrlSelect" style="font-weight: 600; color: var(--dark-color); margin-right: 0.5rem;">选择页面URL:</label>
+                            <select id="urlSourceUrlSelect" style="background: white; border: 1px solid #e0e0e0; color: var(--dark-color); padding: 6px 10px; border-radius: 4px; font-size: 0.9rem; cursor: pointer;">
+                                <option value="overall">所有页面</option>
+                            </select>
+                        </div>
+                        <canvas id="urlSourceChart"></canvas>
                     </div>
                 </div>
                 

@@ -91,14 +91,18 @@ allow_origins = []
 if allow_origins_env:
     # 如果环境变量不为空，按逗号分割多个源
     allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
+    # 移除可能存在的空字符串
+    allow_origins = [origin for origin in allow_origins if origin]
 
+# 企业级CORS配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 允许本地任意端口
-    allow_origins=allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],  # 允许所有方法
-    allow_headers=["*"],  # 允许所有头
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 允许本地开发环境
+    allow_origins=allow_origins,  # 允许配置的生产环境源
+    allow_credentials=True,  # 允许发送凭证
+    allow_methods=["GET", "POST", "OPTIONS"],  # 只允许必要的HTTP方法
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],  # 只允许必要的头
+    max_age=86400,  # 预检请求的缓存时间（秒）
 )
 
 app.add_middleware(TokenRefreshMiddleware)
@@ -108,6 +112,7 @@ app.add_middleware(TokenRefreshMiddleware)
 
 # 创建API路由
 api_router = APIRouter(prefix="/api")
+
 
 SANITIZE_PATTERN = re.compile(r'[.$]')
 def sanitize_key(key: str) -> str:
@@ -186,6 +191,7 @@ async def track_pageview(request: Request, data: dict):
         browser = sanitize_key(data.get('browser', 'unknown'))
         os_name = sanitize_key(data.get('os', 'unknown'))
         device = sanitize_key(data.get('device', 'unknown'))
+        referrer = sanitize_key(data.get('referrer', ''))
         
         return {
             '$inc': {
@@ -203,7 +209,10 @@ async def track_pageview(request: Request, data: dict):
                 # 组合维度统计
                 f'data.byUrlAndBrowser.{url}.{browser}': 1,
                 f'data.byUrlAndDevice.{url}.{device}': 1,
-                f'data.byBrowserAndOS.{browser}.{os_name}': 1
+                f'data.byBrowserAndOS.{browser}.{os_name}': 1,
+                # 来源页面统计
+                f'data.byReferrer.{referrer}': 1,
+                f'data.byUrlAndReferrer.{url}.{referrer}': 1
             },
             '$set': {
                 'system': system,
@@ -271,6 +280,7 @@ async def track_event(request: Request, data: dict):
     跟踪自定义事件
     """
     def event_handler(data, track_type, system, user_fingerprint, client_ip, ip_prefix, current_date):
+        # 标准化事件字段，确保数据一致性
         event_type = sanitize_key(data.get('eventType', 'click'))
         event_category = sanitize_key(data.get('eventCategory', 'engagement'))
         event_action = sanitize_key(data.get('eventAction', 'click'))
@@ -278,7 +288,8 @@ async def track_event(request: Request, data: dict):
         selector = sanitize_key(data.get('selector', 'unknown'))
         url = sanitize_key(data.get('url', 'unknown'))
         
-        return {
+        # 构建更新操作，减少重复代码
+        update_fields = {
             '$inc': {
                 'data.total': 1,
                 f'data.byType.{event_type}': 1,
@@ -314,6 +325,8 @@ async def track_event(request: Request, data: dict):
                 f'data.byIPPrefixUniqueUsers.{ip_prefix}': user_fingerprint
             }
         }
+        
+        return update_fields
     
     return await _track_common(request, data, "events", event_handler)
 
@@ -430,12 +443,11 @@ def get_top_entries(dictionary, limit=10, except_keys=None):
     if not filtered_dict:
         return {}
 
-    # 优化：只在必要时计算嵌套字典总值
+    # 计算嵌套字典总值的函数（非递归方式，避免栈溢出）
     def get_value_score(value):
         """获取值的分数（嵌套字典计算总和，其他返回原值）"""
         if isinstance(value, dict):
             total = 0
-            # 非递归方式计算嵌套字典总和，避免栈溢出
             stack = list(value.values())
             while stack:
                 item = stack.pop()
@@ -449,21 +461,21 @@ def get_top_entries(dictionary, limit=10, except_keys=None):
         else:
             return 0
 
-    res_arr = filtered_dict
+    result = filtered_dict
     if len(filtered_dict) > limit:
-        # 对字典项按值降序排序
-        sorted_items = sorted(
-            filtered_dict.items.items(),
-            key=lambda x: get_value_score(x[1]),
-            reverse=True
-        )
-        # 返回前limit个条目
-        res_arr = sorted_items[:limit]
-    if except_keys:
-        for key in except_keys:
-            if key in dictionary:
-                res_arr[key] = dictionary[key]
-    return dict(res_arr)
+        # 预先计算所有值的分数，避免重复计算
+        items_with_scores = [(k, v, get_value_score(v)) for k, v in filtered_dict.items()]
+        # 按分数降序排序
+        items_with_scores.sort(key=lambda x: x[2], reverse=True)
+        # 取前limit个条目
+        result = {item[0]: item[1] for item in items_with_scores[:limit]}
+    
+    # 添加排除的键
+    for key in except_keys:
+        if key in dictionary:
+            result[key] = dictionary[key]
+    
+    return result
 
 
 @lru_cache_with_ttl(maxsize=50, ttl=5)  # 缓存50个结果，过期时间5秒
@@ -607,9 +619,16 @@ async def _stats_common(system: str, start_date: Optional[str], end_date: Option
             # 聚合嵌套字典数据（使用预计算的字段列表）
             for key in merge_fields:
                 if key in stats_data:
-                    aggregated_stats[key] = merge_nested_dicts(aggregated_stats[key], stats_data[key])
+                    if not aggregated_stats[key]:
+                        # 如果聚合结果为空，直接使用当前数据
+                        aggregated_stats[key] = stats_data[key]
+                    else:
+                        # 合并嵌套字典
+                        aggregated_stats[key] = merge_nested_dicts(aggregated_stats[key], stats_data[key])
+                    
                     # 在聚合过程中应用limit限制，减少内存占用
-                    if key != 'byBrowserAndOsUniqueUsers':  # 特殊字段在finalize中处理
+                    # 只对大型字典应用限制，避免频繁调用get_top_entries
+                    if key != 'byBrowserAndOsUniqueUsers' and len(aggregated_stats[key]) > limit * 2:  # 特殊字段在finalize中处理
                         aggregated_stats[key] = get_top_entries(aggregated_stats[key], limit)
 
             # 合并唯一用户集合（只在存在时处理）
@@ -651,6 +670,8 @@ def _init_pageview_result():
         'byUrlAndBrowser': {},
         'byUrlAndDevice': {},
         'byBrowserAndOS': {},
+        'byReferrer': {},
+        'byUrlAndReferrer': {},
         'uniqueUsers': set(),
         'byIPPrefixUniqueUsers': {},
         'byBrowserAndOsUniqueUsers': {}
@@ -725,8 +746,10 @@ def _finalize_pageview_result(aggregated_stats, limit):
         "os": aggregated_stats.get('byOS', {}),
         "devices": aggregated_stats.get('byDevice', {}),
         "urls": aggregated_stats.get('byUrl', {}),
+        "referrers": aggregated_stats.get('byReferrer', {}),
         "urlAndBrowser": aggregated_stats.get('byUrlAndBrowser', {}),
         "urlAndDevice": aggregated_stats.get('byUrlAndDevice', {}),
+        "urlAndReferrer": aggregated_stats.get('byUrlAndReferrer', {}),
         "browserAndOS": aggregated_stats.get('byBrowserAndOS', {}),
         "byIPPrefix": aggregated_stats.get('byIPPrefix', {}),
         "byUrlAndIPPrefix": aggregated_stats.get('byUrlAndIPPrefix', {}),

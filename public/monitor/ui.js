@@ -67,6 +67,8 @@ function setupTabs() {
                 ipChart.update();
             } else if (tabId === 'combinations' && combinationChart) {
                 combinationChart.update();
+            } else if (tabId === 'sources' && window.urlSourceChart) {
+                window.urlSourceChart.update();
             } else if (tabId === 'downloadFiles' && downloadFileChart) {
                 downloadFileChart.update();
             } else if (tabId === 'downloadSources' && downloadSourceChart) {

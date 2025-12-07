@@ -901,4 +901,136 @@ function renderPageviewTrendChart(pageviewData, durationData) {
             renderChart(selectedUrl);
         });
     }
+    
+    // 绘制来源页面图表
+    renderUrlSourceChart(pageviewData);
+}
+
+// 绘制URL来源页面图表
+function renderUrlSourceChart(pageviewData) {
+    // 获取urlAndReferrer数据
+    const urlAndReferrer = pageviewData.urlAndReferrer || {};
+    const urlSourceCtx = document.getElementById('urlSourceChart').getContext('2d');
+    const urlSourceUrlSelect = document.getElementById('urlSourceUrlSelect');
+    
+    // 清空并初始化URL选择器
+    urlSourceUrlSelect.innerHTML = '<option value="overall">所有页面</option>';
+    
+    // 添加URL选项
+    Object.keys(urlAndReferrer).forEach(url => {
+        const option = document.createElement('option');
+        option.value = url;
+        option.textContent = url.length > 50 ? url.substring(0, 50) + '...' : url;
+        urlSourceUrlSelect.appendChild(option);
+    });
+    
+    // 绘制图表的函数
+    function drawChart(selectedUrl) {
+        let sourceData = {};
+        
+        if (selectedUrl === 'overall') {
+            // 计算所有页面的来源统计
+            Object.values(urlAndReferrer).forEach(referrerMap => {
+                Object.entries(referrerMap).forEach(([referrer, count]) => {
+                    if (!sourceData[referrer]) {
+                        sourceData[referrer] = 0;
+                    }
+                    sourceData[referrer] += count;
+                });
+            });
+        } else {
+            // 只显示选中页面的来源统计
+            sourceData = urlAndReferrer[selectedUrl] || {};
+        }
+        
+        // 按访问次数排序
+        const sortedSources = Object.entries(sourceData)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 10); // 只显示前10个来源
+        
+        const labels = sortedSources.map(([referrer]) => {
+            // 将"unknown"标签改为"直接访问"
+            const displayReferrer = referrer === 'unknown' ? '直接访问' : referrer;
+            return displayReferrer.length > 30 ? displayReferrer.substring(0, 30) + '...' : displayReferrer;
+        });
+        const data = sortedSources.map(([, count]) => count);
+        const fullLabels = sortedSources.map(([referrer]) => {
+            // 将"unknown"标签改为"直接访问"
+            return referrer === 'unknown' ? '直接访问' : referrer;
+        });
+        
+        // 销毁旧图表
+        if (window.urlSourceChart && typeof window.urlSourceChart.destroy === 'function') {
+            window.urlSourceChart.destroy();
+        }
+        
+        // 创建新图表
+        window.urlSourceChart = new Chart(urlSourceCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '访问次数',
+                    data: data,
+                    backgroundColor: '#4361ee',
+                    borderColor: '#3a0ca3',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        },
+                        title: {
+                            display: true,
+                            text: '访问次数'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                const index = tooltipItems[0].dataIndex;
+                                return fullLabels[index]; // 显示完整的来源URL
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: selectedUrl === 'overall' ? '所有页面的访问来源统计' : `页面 "${selectedUrl}" 的访问来源统计`
+                    }
+                }
+            }
+        });
+    }
+    
+    // 初始绘制图表
+    drawChart('overall');
+    
+    // 添加选择事件监听器
+    // 先移除旧的事件监听器
+    const newUrlSourceUrlSelect = urlSourceUrlSelect.cloneNode(true);
+    urlSourceUrlSelect.parentNode.replaceChild(newUrlSourceUrlSelect, urlSourceUrlSelect);
+    
+    // 添加新的事件监听器
+    newUrlSourceUrlSelect.addEventListener('change', function() {
+        const selectedUrl = this.value;
+        drawChart(selectedUrl);
+    });
 }
