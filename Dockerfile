@@ -8,8 +8,6 @@ WORKDIR /app
 RUN npm install -g terser csso-cli
 
 # 复制源文件
-COPY *.py .
-COPY requirements.txt .
 COPY public/monitor/chart.js public/monitor/
 COPY public/monitor/webfonts/ public/monitor/webfonts/
 COPY public/monitor/fontawesome.css public/monitor/
@@ -30,7 +28,8 @@ RUN terser --compress --mangle -o public/pagemonitor.min.js src/pagemonitor.js &
     # 使用csso工具压缩CSS文件
     csso src/monitor/index.css -o public/monitor/index.min.css
 
-RUN sed -i 's/index.css/index.min.css/g' public/monitor/index.html && \
+RUN sed -i 's/index.css/index.min.css/g' public/monitor/login.html && \
+    sed -i 's/index.css/index.min.css/g' public/monitor/index.html && \
     sed -i 's/pageViewCharts.js/pageViewCharts.min.js/g' public/monitor/index.html && \
     sed -i 's/downloadsCharts.js/downloadsCharts.min.js/g' public/monitor/index.html && \
     sed -i 's/eventCharts.js/eventCharts.min.js/g' public/monitor/index.html && \
@@ -50,7 +49,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
-COPY track.py .
+COPY *.py .
 
 # 从构建阶段复制处理后的文件
 COPY --from=builder /app/public/ /app/public/

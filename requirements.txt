@@ -1,3 +1,6 @@
 fastapi
 pymongo
 uvicorn
+# jwt
+python-jose[cryptography]
+python-multipart

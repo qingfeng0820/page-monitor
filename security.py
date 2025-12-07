@@ -11,7 +11,7 @@ from functools import lru_cache
 
 from starlette.responses import RedirectResponse
 
-from auth.models import User
+from models import User
 
 # JWT配置
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your-secret-key")
