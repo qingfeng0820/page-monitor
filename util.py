@@ -3,7 +3,7 @@ import time
 from functools import wraps
 from typing import Callable, Dict, Tuple, Any
 from fastapi import Request
-
+from security import require_permissions
 
 # 带过期时间的LRU缓存装饰器（支持异步函数）
 def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 3600):
@@ -122,3 +122,7 @@ def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 3600):
         return cached_func
 
     return decorator
+
+
+def access_system(system=None):
+    return require_permissions(required_permissions=[system])

@@ -7,6 +7,8 @@ let eventTypeChart, eventCategoryChart, eventActionChart, eventLabelChart, event
 
 // 初始化函数
 document.addEventListener('DOMContentLoaded', function() {
+
+
     // 初始化时间范围选择器
     initDateRangeSelector();
     
@@ -21,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 设置登出功能
     setupLogout();
+    
+    // 设置配置按钮功能
+    setupConfig();
 });
 
 // 登出功能
@@ -33,7 +38,7 @@ function setupLogout() {
             if (!confirmed) {
                 return; // 用户取消登出
             }
-            
+
             try {
                 // 发送登出请求 (后端已改为GET请求)
                 const response = await fetch('/logout', {
@@ -43,8 +48,9 @@ function setupLogout() {
                     },
                     credentials: 'include'  // 包含cookie
                 });
-                
                 if (response.ok) {
+                    localStorage.removeItem('username');
+                    localStorage.removeItem('selectedSiteName');
                     // 登出成功，重定向到登录页面
                     window.location.href = '/login.html';
                 } else {
@@ -53,6 +59,18 @@ function setupLogout() {
             } catch (error) {
                 console.error('登出错误:', error);
             }
+        });
+    }
+}
+
+// 配置按钮功能
+function setupConfig() {
+    const configBtn = document.getElementById('configBtn');
+    if (configBtn) {
+        configBtn.addEventListener('click', () => {
+            console.log('配置按钮被点击');
+            // 跳转到control.html页面进行脚本拷贝
+            window.location.href = 'control.html';
         });
     }
 }

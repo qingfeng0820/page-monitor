@@ -102,8 +102,9 @@ function renderDownloadCharts(downloadData) {
             const userEntries = Object.entries(downloadData.byUser)
                 .sort(([,a], [,b]) => b - a);
             
+            // 截断过长的用户ID，保留前10个字符
             downloadUserLabels = userEntries.map(([id]) => {
-                return id;
+                return id.length > 10 ? id.substring(0, 10) + '...' : id;
             });
             downloadUserData = userEntries.map(([, count]) => count);
         } else {

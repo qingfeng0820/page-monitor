@@ -1,120 +1,23 @@
-from urllib.parse import quote
-
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.staticfiles import StaticFiles
-from motor.motor_asyncio import AsyncIOMotorClient
+
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 import re
-import os
 import hashlib
 import logging
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse
-from contextlib import asynccontextmanager
+from mongodb import stats_collection, sites_collection
+from util import lru_cache_with_ttl, access_system
 
-from security import require_login, logout_user, login_user, get_current_user, JWT_EXPIRE_PERIOD
-from util import lru_cache_with_ttl
-
-# 配置logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-from starlette.middleware.cors import CORSMiddleware
-
-class TokenRefreshMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        # 如果有新生成的令牌，更新响应的cookie
-        if hasattr(request.state, 'new_token'):
-            response.set_cookie(
-                key="access_token", 
-                value=request.state.new_token, 
-                httponly=True, 
-                secure=False,  # 生产环境应设置为True
-                max_age=JWT_EXPIRE_PERIOD
-            )
-        return response
-
-# 配置MongoDB连接
-MONGODB_URI = os.getenv("MONGO_DB_CONN_STR", "mongodb://localhost:27017/")
-
-# 添加连接池配置和连接选项
-MONGODB_OPTIONS = {
-    'maxPoolSize': 100,  # 最大连接池大小
-    'minPoolSize': 10,   # 最小连接池大小
-    'maxIdleTimeMS': 30000,  # 连接最大空闲时间（毫秒）
-    'serverSelectionTimeoutMS': 5000,  # 服务器选择超时时间
-    'connectTimeoutMS': 20000,  # 连接超时时间
-    'socketTimeoutMS': 20000,  # socket超时时间
-    'heartbeatFrequencyMS': 20000,  # 心跳检测频率
-}
-
-# 应用连接池配置和连接选项
-client = AsyncIOMotorClient(MONGODB_URI, **MONGODB_OPTIONS)
-db = client["page_monitor"]
-stats_collection = db["monitor_stats"]
-
-# 定义lifespan事件处理器
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    try:
-        # 添加索引以提高查询性能
-        # 为常用查询字段创建三级复合唯一索引（系统+日期+统计类型）
-        await stats_collection.create_index([("system", 1), ("date", 1), ("type", 1)], unique=True, background=True)
-        # 为单个查询字段创建索引
-        await stats_collection.create_index([("system", 1)], background=True)
-        await stats_collection.create_index([("date", 1)], background=True)
-        await stats_collection.create_index([("type", 1)], background=True)
-        # 为lastUpdated字段创建索引，方便按时间排序
-        await stats_collection.create_index([("lastUpdated", -1)], background=True)
-        
-        logger.info("MongoDB connection established successfully")
-        logger.info("MongoDB indexes created successfully")
-    except Exception as e:
-        logger.error(f"Failed to connect to MongoDB or create indexes: {str(e)}")
-        raise
-    yield
-    # Shutdown
-    # 这里可以添加关闭时的清理代码
-
-app = FastAPI(title="页面访问监控API", lifespan=lifespan)
-
-# 获取CORS允许的源列表
-allow_origins_env = os.getenv("ALLOW_ORIGINS")
-allow_origins = []
-
-if allow_origins_env:
-    # 如果环境变量不为空，按逗号分割多个源
-    allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
-    # 移除可能存在的空字符串
-    allow_origins = [origin for origin in allow_origins if origin]
-
-# 企业级CORS配置
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 允许本地开发环境
-    allow_origins=allow_origins,  # 允许配置的生产环境源
-    allow_credentials=True,  # 允许发送凭证
-    allow_methods=["GET", "POST", "OPTIONS"],  # 只允许必要的HTTP方法
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],  # 只允许必要的头
-    max_age=86400,  # 预检请求的缓存时间（秒）
-)
-
-app.add_middleware(TokenRefreshMiddleware)
-
-
-
+SANITIZE_PATTERN = re.compile(r'[.$]')
 
 # 创建API路由
 api_router = APIRouter(prefix="/api")
 
 
-SANITIZE_PATTERN = re.compile(r'[.$]')
 def sanitize_key(key: str) -> str:
     """清理key中的特殊字符"""
     if not key:
@@ -142,6 +45,67 @@ def get_client_ip(request: Request) -> str:
     return request.client.host
 
 
+async def check_site_api_key(request: Request, data: dict):
+    url = sanitize_key(data.get('url', 'unknown'))
+    system = sanitize_key(data.get('system', 'default'))
+    api_key = request.headers.get("X-API-Key")
+    
+    # 如果没有提供system或apikey，抛出403错误
+    if not system:
+        raise HTTPException(status_code=403, detail="System parameter is required")
+    
+    if not api_key:
+        raise HTTPException(status_code=403, detail="API key is required in X-API-Key header")
+    
+    # 查询sites_collection，检查system是否注册且apikey匹配
+    site = await sites_collection.find_one({
+        "site_name": system,
+        "api_key": api_key
+    })
+    
+    # 如果找不到匹配的记录，抛出404错误
+    if not site:
+        raise HTTPException(status_code=404, detail="System not registered or invalid API key")
+    
+    # 检查url是否与注册的site_url匹配
+    # 1. 从request中获取origin
+    # 2. 检查URL是否以origin为前缀
+    # 3. 比对origin与注册URL是否匹配
+    registered_url = site.get("site_url")
+    
+    # 如果registered_url为空，返回500错误
+    if not registered_url:
+        raise HTTPException(status_code=500, detail="找不到registered_url")
+    
+    sanitized_registered_url = sanitize_key(registered_url)
+    
+    # 只从Origin头获取请求的origin
+    request_origin = request.headers.get("Origin")
+    
+    if request_origin:
+        # 检查当前URL是否以请求origin为前缀
+        if not url.startswith(request_origin):
+            raise HTTPException(status_code=403, detail="URL不对")
+        
+        # 解析注册的URL的origin
+        try:
+            registered_parsed = urlparse(sanitized_registered_url)
+            registered_origin = f"{registered_parsed.scheme}://{registered_parsed.netloc}"
+            
+            # 比对请求origin与注册URL的origin是否匹配
+            if request_origin == registered_origin:
+                return True
+        except:
+            # 如果URL解析失败，继续检查完全匹配
+            pass
+    
+    # 如果以上验证都失败，尝试完全匹配
+    if url != sanitized_registered_url:
+        raise HTTPException(status_code=403, detail="URL does not match registered site URL")
+    
+    return True
+
+
 async def _track_common(request: Request, data: dict, track_type: str, detail_handler):
     """
     通用跟踪处理函数，处理重复的初始化和数据库更新逻辑
@@ -151,6 +115,7 @@ async def _track_common(request: Request, data: dict, track_type: str, detail_ha
     :param detail_handler: 具体跟踪类型的处理函数，返回update_fields
     :return: 跟踪结果
     """
+    await check_site_api_key(request, data)
     try:
         # 从request data中获取system参数
         system = sanitize_key(data.get('system', 'default'))
@@ -479,7 +444,8 @@ def get_top_entries(dictionary, limit=10, except_keys=None):
 
 
 @lru_cache_with_ttl(maxsize=50, ttl=5)  # 缓存50个结果，过期时间5秒
-async def _stats_common(system: str, start_date: Optional[str], end_date: Optional[str], limit: int,
+@access_system("${system}")
+async def _stats_common(request: Request, system: str, start_date: Optional[str], end_date: Optional[str], limit: int,
                         stats_type: str, result_initializer, unique_users_handler, final_result_handler):
     """
     通用统计处理函数，处理重复的查询和聚合逻辑
@@ -763,7 +729,6 @@ def _finalize_pageview_result(aggregated_stats, limit):
 
 
 @api_router.get("/stats/pageview")
-@require_login()
 async def get_technology_stats(request: Request, system: str = "default",
                                start_date: Optional[str] = None, end_date: Optional[str] = None,
                                limit: int = 10):
@@ -771,6 +736,7 @@ async def get_technology_stats(request: Request, system: str = "default",
     获取页面访问统计
     """
     return await _stats_common(
+        request,
         system, start_date, end_date, limit,
         "pageViews",
         _init_pageview_result,
@@ -853,7 +819,6 @@ def _finalize_downloads_result(aggregated_stats, limit):
 
 
 @api_router.get("/stats/downloads")
-@require_login()
 async def get_download_stats(request: Request, system: str = "default",
                              start_date: Optional[str] = None, end_date: Optional[str] = None,
                              limit: int = 10):
@@ -861,6 +826,7 @@ async def get_download_stats(request: Request, system: str = "default",
     获取下载统计
     """
     return await _stats_common(
+        request,
         system, start_date, end_date, limit,
         "downloads",
         _init_downloads_result,
@@ -970,7 +936,6 @@ def _finalize_events_result(aggregated_stats, limit):
 
 
 @api_router.get("/stats/events")
-@require_login()
 async def get_event_stats(request: Request, system: str = "default",
                           start_date: Optional[str] = None, end_date: Optional[str] = None,
                           limit: int = 10):
@@ -978,6 +943,7 @@ async def get_event_stats(request: Request, system: str = "default",
     获取事件统计
     """
     return await _stats_common(
+        request,
         system, start_date, end_date, limit,
         "events",
         _init_events_result,
@@ -1041,7 +1007,6 @@ def _finalize_duration_result(aggregated_stats, limit):
 
 
 @api_router.get("/stats/duration")
-@require_login()
 async def get_duration_stats(request: Request, system: str = "default",
                              start_date: Optional[str] = None, end_date: Optional[str] = None,
                              limit: int = 10):
@@ -1049,6 +1014,7 @@ async def get_duration_stats(request: Request, system: str = "default",
     获取停留时长统计
     """
     return await _stats_common(
+        request,
         system, start_date, end_date, limit,
         "duration",
         _init_duration_result,
@@ -1057,68 +1023,46 @@ async def get_duration_stats(request: Request, system: str = "default",
     )
 
 
-@app.post("/login")
-async def login_for_access_token(response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
-    access_token = await login_user(form_data.username, form_data.password)
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,     # 防止XSS攻击
-        # secure=True,       # 仅在HTTPS下传输
-        samesite="lax",    # 防止CSRF攻击
-        max_age=3600,      # 过期时间（秒）
-        path="/"           # Cookie路径
-    )
-    return {"message": "Login successful"}
-
-@app.post("/logout")
-@require_login()
-async def logout(request: Request, response: Response):
+async def _delete_system_stats(system: str) -> Dict[str, Any]:
+    """
+    删除指定system的所有统计数据（普通方法，不带有路由装饰器）
+    
+    Args:
+        system: 要删除统计数据的系统名称
+    
+    Returns:
+        包含删除结果的字典
+    """
     try:
-        current_user = await get_current_user(request)
-        await logout_user(current_user.username)
+        # 清理system名称中的特殊字符
+        sanitized_system = sanitize_key(system)
+        
+        # 删除该系统的所有统计数据
+        result = await stats_collection.delete_many({'system': sanitized_system})
+        
+        return {
+            "success": True,
+            "message": f"成功删除系统 '{sanitized_system}' 的统计数据",
+            "deleted_count": result.deleted_count
+        }
     except Exception as e:
-        pass
-    response.delete_cookie(
-        key="access_token",
-        path="/",  # 与设置时保持一致
-        # domain="example.com"  # 如果设置了domain也需要指定
-    )
-    return {"message": "Logout successful"}
+        logger.error(f"删除系统统计数据失败: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"删除系统统计数据失败: {str(e)}")
 
 
-class ProtectedStaticFiles(StaticFiles):
-    async def __call__(self, scope, receive, send) -> None:
-        request = Request(scope, receive)
-
-        # 检查请求的文件是否为HTML文件
-        path = scope.get("path", "")
-        is_html_file = path == "/" or path.endswith('.html') and not path.endswith('/login.html') if path else False
-
-        if is_html_file:
-            redirect_url = f"/login.html?url={quote(str(request.url))}"
-            try:
-                current_user = await get_current_user(request)
-                if not current_user:
-                    response = RedirectResponse(url=redirect_url)
-                    await response(scope, receive, send)
-                    return
-            except:
-                response = RedirectResponse(url=redirect_url)
-                await response(scope, receive, send)
-                return
-        await super().__call__(scope, receive, send)
-
-
-# 注册API路由
-app.include_router(api_router)
-
-# 配置静态文件服务（放在API路由定义之后）
-app.mount("/public", StaticFiles(directory="public"), name="public")
-app.mount("/webfonts", StaticFiles(directory="public/monitor/webfonts"), name="webfonts")
-app.mount("/", ProtectedStaticFiles(directory="public/monitor", html=True), name="root")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@api_router.delete("/stats/{system}")
+@access_system("${system}")
+async def delete_system_stats(request: Request, system: str):
+    """
+    删除指定system的所有统计数据
+    
+    Args:
+        request: 请求对象，用于获取当前用户信息
+        system: 要删除统计数据的系统名称
+    """
+    try:
+        # 权限检查由access_system装饰器处理
+        return await _delete_system_stats(system)
+    except Exception as e:
+        logger.error(f"API删除统计数据失败: {str(e)}", exc_info=True)
+        raise

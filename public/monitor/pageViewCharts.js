@@ -206,8 +206,9 @@ function renderPageviewCharts(pageviewData, durationData) {
             const userEntries = Object.entries(pageviewData.byUser)
                 .sort(([,a], [,b]) => b - a);
             
+            // 截断过长的用户ID，保留前10个字符
             userLabels = userEntries.map(([id]) => {
-                return id;
+                return id.length > 10 ? id.substring(0, 10) + '...' : id;
             });
             userData = userEntries.map(([, count]) => count);
             

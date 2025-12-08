@@ -15,6 +15,10 @@
             <div>
                 <h1><i class="fas fa-chart-line"></i> 页面访问与下载监控面板</h1>
                 <div class="subtitle">实时监控页面访问情况和下载统计</div>
+                <div class="system-user-info">
+                    <div class="current-system">当前系统: <span id="currentSystemName">未选择</span></div>
+                    <div class="current-user">当前用户: <span id="username">未登录</span></div>
+                </div>
             </div>
             <div class="header-controls">
                 <div class="date-range-selector">
@@ -48,9 +52,14 @@
                 <button class="refresh-btn" id="refreshBtn">
                     <i class="fas fa-sync-alt"></i> 刷新数据
                 </button>
-                <button class="logout-btn" id="logoutBtn" title="登出">
-                    <i class="fas fa-sign-out-alt"></i>
-                </button>
+                <div class="user-controls">
+                    <button class="config-btn" id="configBtn" title="配置">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                    <button class="logout-btn" id="logoutBtn" title="登出">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
             </div>
         </header>
         

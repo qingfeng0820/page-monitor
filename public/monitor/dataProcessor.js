@@ -85,9 +85,53 @@ async function loadData() {
 
         // 获取system参数
         const urlParams = new URLSearchParams(window.location.search)
-        const systemParam = urlParams.get('system')
+        let systemParam = urlParams.get('system')
         if (systemParam) { 
             queryParams.append('system', systemParam);
+        } else {
+            systemParam = localStorage.getItem('selectedSiteName');
+            if (systemParam) {
+                queryParams.append('system', systemParam);
+            } else {
+                
+                // 如果没有选择系统，先获取系统列表
+                try {
+                    const response = await fetch('/sites');
+                    if (response.ok) {
+                        const systems = await response.json();
+                        if (systems.length === 1) {
+                            // 如果只有一个系统，直接使用
+                            systemParam = systems[0].site_name;
+                            queryParams.append('system', systemParam);
+                            // 保存到localStorage
+                            localStorage.setItem('selectedSiteName', systemParam);
+                        } else {
+                            // 如果没有系统或有多个系统，跳转到control.html页面
+                            window.location.href = '/control.html';
+                            return; // 终止后续代码执行
+                        }
+                    } else {
+                        // API请求失败，跳转到control.html
+                        window.location.href = '/control.html';
+                        return;
+                    }
+                } catch (error) {
+                    console.error('获取系统列表失败:', error);
+                    // 请求出错，跳转到control.html
+                    window.location.href = '/control.html';
+                    return;
+                }
+            }
+        }
+
+        const currentSystemNameElement = document.getElementById('currentSystemName');
+        if (currentSystemNameElement) {
+            currentSystemNameElement.textContent = systemParam || '未选择';
+        }
+
+        const username = localStorage.getItem('username');
+        if (username) {
+            document.getElementById('username').textContent = `欢迎，${username}`;
         }
         
         // 构建API URL（使用相对路径，确保在Docker容器内正常工作）

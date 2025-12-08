@@ -28,8 +28,7 @@ RUN terser --compress --mangle -o public/pagemonitor.min.js src/pagemonitor.js &
     # 使用csso工具压缩CSS文件
     csso src/monitor/index.css -o public/monitor/index.min.css
 
-RUN sed -i 's/index.css/index.min.css/g' public/monitor/login.html && \
-    sed -i 's/index.css/index.min.css/g' public/monitor/index.html && \
+RUN sed -i 's/index.css/index.min.css/g' public/monitor/*.html && \
     sed -i 's/pageViewCharts.js/pageViewCharts.min.js/g' public/monitor/index.html && \
     sed -i 's/downloadsCharts.js/downloadsCharts.min.js/g' public/monitor/index.html && \
     sed -i 's/eventCharts.js/eventCharts.min.js/g' public/monitor/index.html && \
@@ -60,7 +59,7 @@ ENV ALLOW_ORIGINS=""
 EXPOSE 8000
 
 # 启动应用
-CMD ["uvicorn", "track:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # build 命令： sudo docker build -t simple-track .
 # 运行命令: sudo docker run -d --name simple-track -p 8000:8000 -e MONGO_DB_CONN_STR="mongodb://localhost:27017/" -e ALLOW_ORIGINS="*" simple-track:latest

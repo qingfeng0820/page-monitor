@@ -18,6 +18,7 @@ class User(BaseModel):
     full_name: Optional[str] = None
     disabled: Optional[bool] = None
     permissions: List[str] = []
+    is_super: bool = False
 
 
 class UserInDB(User):

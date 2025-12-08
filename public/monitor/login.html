@@ -117,6 +117,8 @@
                 });
                 
                 if (response.ok) {
+                    localStorage.setItem('username', username);
+     
                     // 登录成功，跳转到首页
                     const urlParams = new URLSearchParams(window.location.search)
                     const redirectUri = urlParams.get('url')

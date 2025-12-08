@@ -215,8 +215,9 @@ function renderEventCharts(eventData) {
         const userEntries = Object.entries(eventData.byUser)
             .sort(([,a], [,b]) => b - a);
         
+        // 截断过长的用户ID，保留前10个字符
         eventUserLabels = userEntries.map(([id]) => {
-            return id;
+            return id.length > 10 ? id.substring(0, 10) + '...' : id;
         });
         eventUserData = userEntries.map(([, count]) => count);
     } else {

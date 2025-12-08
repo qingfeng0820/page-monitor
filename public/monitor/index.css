@@ -50,6 +50,17 @@ header {
     gap: 1rem;
 }
 
+.user-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.5rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+}
+
 .date-range-selector {
     display: flex;
     flex-direction: column;
@@ -185,6 +196,45 @@ h1 {
     font-weight: 300;
 }
 
+.current-system {
+    font-size: 1rem;
+    opacity: 0.95;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    display: inline-block;
+    backdrop-filter: blur(5px);
+}
+
+.current-system span {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.current-user {
+    font-size: 1rem;
+    opacity: 0.95;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    display: inline-block;
+    backdrop-filter: blur(5px);
+}
+
+.current-user span {
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.system-user-info {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+}
+
 /* 图表控制区域样式 */
 .chart-controls {
     display: flex;
@@ -267,9 +317,29 @@ h1 {
     transition: all 0.3s ease;
 }
 
-.refresh-btn:hover, .logout-btn:hover {
+.refresh-btn:hover, .config-btn:hover, .logout-btn:hover {
     background: rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
+}
+
+.config-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    padding: 10px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    transition: all 0.3s ease;
+}
+
+.config-btn span {
+    display: none;
 }
 
 .logout-btn {

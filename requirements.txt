@@ -1,6 +1,9 @@
 fastapi
 motor
 uvicorn
+python-multipart
 # jwt
 python-jose[cryptography]
-python-multipart
+# crypt password
+passlib==1.7.4
+bcrypt==4.0.1

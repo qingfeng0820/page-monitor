@@ -5,13 +5,28 @@ class PageMonitor {
     
     constructor(options = {}) {
         try {
+            this.logLevel = options.logLevel || "warn"; // debug模式，控制是否打印日志
+            // 初始化监控未启用标志
+            this.isMonitoringEnabled = true;
+            
+            // 检查必要参数
+            if (!options.system) {
+                this.log_warn('System parameter is required. Monitoring will not be started.');
+                this.isMonitoringEnabled = false;
+            }
+            if (!options.apiKey) {
+                this.log_warn('API Key parameter is required. Monitoring will not be started.');
+                this.isMonitoringEnabled = false;
+            }
+            
             this.apiBaseUrl = options.apiBaseUrl || '/api';
+            this.system = options.system;
+            this.apiKey = options.apiKey;
             this.currentUrl = window.location ? window.location.href : '';
             this.pageTitle = document.title || '';
             this.isSPA = options.isSPA || false;
             this.isTrackDownloads = options.isTrackDownloads || true;
             this.maxPendingItems = options.maxPendingItems || 50; // 最大待处理记录数，默认50条
-            this.logLevel = options.logLevel || "warn"; // debug模式，控制是否打印日志
             this.customEvents = options.customEvents || []; // 自定义事件配置
             // 页面停留时长相关属性
             this.activeTimeThreshold = options.activeTimeThreshold || 600000; // 10分钟无活动视为不活跃
@@ -19,11 +34,14 @@ class PageMonitor {
             this.pageLastActiveTime = Date.now(); // 页面最后活跃时间
             this.isPageVisible = true; // 页面是否可见
             
-            // 安全初始化
-            this.init();
-            
-            // 异步重试，避免阻塞构造函数
-            setTimeout(() => this.retryPendingTracking(), 100);
+            // 只有当监控启用时才初始化
+            if (this.isMonitoringEnabled) {
+                // 安全初始化
+                this.init();
+                
+                // 异步重试，避免阻塞构造函数
+                setTimeout(() => this.retryPendingTracking(), 100);
+            }
         } catch (error) {
             // 捕获构造函数中的所有错误，确保页面不会因为监控脚本失败而崩溃
             this.log_error('PageMonitor constructor error:', error);
@@ -721,24 +739,34 @@ class PageMonitor {
             // 安全构建URL
             const url = `${this.apiBaseUrl}${endpoint}`;
             
+            // 添加system到数据中
+            const dataWithSystem = {
+                ...data,
+                system: this.system
+            };
+            
             // 安全序列化数据
             let body;
             try {
-                body = JSON.stringify(data);
+                body = JSON.stringify(dataWithSystem);
             } catch (jsonError) {
                 this.log_error('JSON序列化失败:', jsonError);
                 // 使用简化数据进行重试
                 const simplifiedData = {
                     type: type,
                     timestamp: new Date().toISOString(),
-                    url: this.currentUrl
+                    url: this.currentUrl,
+                    system: this.system
                 };
                 body = JSON.stringify(simplifiedData);
             }
             
             const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': this.apiKey
+                },
                 body: body,
                 // 添加超时控制
                 signal: AbortSignal.timeout(5000) // 5秒超时
@@ -1338,6 +1366,9 @@ class PageMonitor {
                     const scriptUrl = new URL(targetScript.src);
                     config.apiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}/api`;
                 }
+                // 添加对system和apiKey的支持
+                if (params.has('system')) config.system = params.get('system');
+                if (params.has('apiKey')) config.apiKey = params.get('apiKey');
                 if (params.has('isSPA')) config.isSPA = params.get('isSPA') === 'true';
                 if (params.has('isTrackDownloads')) config.isTrackDownloads = params.get('isTrackDownloads') === 'true';
                 if (params.has('maxPendingItems')) {
@@ -1345,6 +1376,13 @@ class PageMonitor {
                         config.maxPendingItems = Number(params.get('maxPendingItems'));
                     } catch (e) {
                         this.log_warn('Invalid maxPendingItems in URL params:', e);
+                    }
+                }
+                if (params.has('activeTimeThreshold')) {
+                    try {
+                        config.activeTimeThreshold = Number(params.get('activeTimeThreshold'));
+                    } catch (e) {
+                        this.log_warn('Invalid activeTimeThreshold in URL params:', e);
                     }
                 }
                 if (params.has('logLevel')) config.logLevel = params.get('logLevel');

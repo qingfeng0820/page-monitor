@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from functools import wraps
@@ -8,17 +9,32 @@ from fastapi import HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from functools import lru_cache
+from passlib.context import CryptContext
 
 from starlette.responses import RedirectResponse
 
 from models import User
+
+# 密码加密上下文
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def get_password_hash(password: str) -> str:
+    """生成密码的哈希值"""
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码是否匹配哈希值"""
+    return pwd_context.verify(plain_password, hashed_password)
+
 
 # JWT配置
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your-secret-key")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_PERIOD = int(os.environ.get("JWT_EXPIRE_PERIOD", 1800))
 JWT_DECODE_PAYLOAD_CACHE_TTL = int(os.environ.get("JWT_DECODE_PAYLOAD_CACHE_TTL", 300))
-JWT_AUTO_REFRESH_TOKEN = bool(os.environ.get("JWT_AUTO_REFRESH_TOKEN", True))
+JWT_AUTO_REFRESH_TOKEN = os.environ.get("JWT_AUTO_REFRESH_TOKEN", "True").lower() == "true"
 SESSION_TIMEOUT = int(os.environ.get("SESSION_TIMEOUT", 600))
 
 # OAuth2 scheme
@@ -42,26 +58,34 @@ class UserCache:
     def __init__(self, ttl: int = 300):
         self._cache: Dict[str, Tuple[User, float]] = {}  # {username: (user, expire_time)}
         self._ttl = ttl
+        self._lock = threading.Lock()
 
     def get(self, username: str) -> Optional[User]:
-        self._cleanup_expired()
+        with self._lock:
+            self._cleanup_expired()
 
-        if username in self._cache:
-            user, expire_time = self._cache[username]
-            if time.time() < expire_time:
-                return user
-            else:
-                del self._cache[username]
-        return None
+            if username in self._cache:
+                user, expire_time = self._cache[username]
+                if time.time() < expire_time:
+                    return user
+                else:
+                    del self._cache[username]
+            return None
 
     def set(self, username: str, user: User) -> None:
-        expire_time = time.time() + self._ttl
-        self._cache[username] = (user, expire_time)
+        with self._lock:
+            expire_time = time.time() + self._ttl
+            self._cache[username] = (user, expire_time)
 
     def clear(self, username: str = None) -> None:
-        if username:
-            self._cache.pop(username, None)
-        else:
+        with self._lock:
+            if username:
+                self._cache.pop(username, None)
+            else:
+                self._cache.clear()
+
+    def clear_all(self) -> None:
+        with self._lock:
             self._cache.clear()
 
     def _cleanup_expired(self) -> None:
@@ -72,6 +96,11 @@ class UserCache:
         ]
         for key in expired_keys:
             del self._cache[key]
+
+    def cleanup_expired(self) -> None:
+        """对外暴露的清理方法，确保线程安全"""
+        with self._lock:
+            self._cleanup_expired()
 
 
 class UserService(ABC):
@@ -99,6 +128,7 @@ class InMemoryUserService(UserService):
                 "full_name": "Admin User",
                 "email": "admin@example.com",
                 "permissions": [],
+                "is_super": True,
                 "disabled": False,
             },
             "tester": {
@@ -125,18 +155,36 @@ class InMemoryUserService(UserService):
         return None
 
 
-user_service = InMemoryUserService()
+# 全局变量存储UserService实例
+_current_user_service = None
+
+
+def get_user_service() -> UserService:
+    """获取UserService实例
+    
+    支持通过set_user_service函数注入自定义实现：
+    ```python
+    from security import get_user_service, set_user_service
+    set_user_service(CustomUserService())
+    ```
+    """
+    global _current_user_service
+    if _current_user_service is None:
+        _current_user_service = InMemoryUserService()
+    return _current_user_service
+
+
+def set_user_service(service: UserService) -> None:
+    """设置自定义的UserService实现"""
+    global _current_user_service
+    _current_user_service = service
+
+
 user_cache = UserCache(ttl=SESSION_TIMEOUT)
 
 
 def cleanup_expired_cache() -> None:
-    current_time = time.time()
-    expired_keys = [
-        username for username, (_, expire_time) in user_cache._cache.items()
-        if current_time >= expire_time
-    ]
-    for key in expired_keys:
-        del user_cache._cache[key]
+    user_cache.cleanup_expired()
 
 
 @lru_cache(maxsize=1000)
@@ -170,27 +218,27 @@ async def get_current_user(request: Request) -> Optional[User]:
         current_time = time.time()
         exp = payload.get("exp", 0)
         if JWT_AUTO_REFRESH_TOKEN and exp - current_time < 300:  # 少于5分钟，需要刷新
-            # 重新生成新的JWT令牌
-            user = await user_service.get_user_by_username(username)
-            if user:
-                # 生成新的JWT令牌
-                new_token = create_access_token(data={"sub": user.username})
-                # 更新cookie
-                response = RedirectResponse(url=request.url.path)
-                response.set_cookie(
-                    key="access_token", 
-                    value=new_token, 
-                    httponly=True, 
-                    secure=False,  # 生产环境应设置为True
-                    max_age=JWT_EXPIRE_PERIOD
-                )
-                request.state.new_token = new_token
+            # 生成新的JWT令牌
+                user = await get_user_service().get_user_by_username(username)
+                if user:
+                    # 生成新的JWT令牌
+                    new_token = create_access_token(data={"sub": user.username})
+                    # 更新cookie
+                    response = RedirectResponse(url=request.url.path)
+                    response.set_cookie(
+                        key="access_token", 
+                        value=new_token, 
+                        httponly=True, 
+                        secure=False,  # 生产环境应设置为True
+                        max_age=JWT_EXPIRE_PERIOD
+                    )
+                    request.state.new_token = new_token
     except JWTError:
         return None
 
     user = user_cache.get(username)
     if user is None:
-        user = await user_service.get_user_by_username(username)
+        user = await get_user_service().get_user_by_username(username)
         if user:
             user_cache.set(username, user)
     if user.disabled:
@@ -226,9 +274,52 @@ def require_permissions(required_permissions: Optional[List[str]] = None, login_
                     return RedirectResponse(url=login_url, status_code=status.HTTP_302_FOUND)
                 raise credentials_exception
             if required_permissions:
-                user_permissions = getattr(current_user, 'permissions', [])
-                if not any(permission in user_permissions for permission in required_permissions):
-                    raise permissions_exception
+                is_super = getattr(current_user, 'is_super', False)
+                if not is_super:
+                    user_permissions = getattr(current_user, 'permissions', [])
+                    # 检查用户是否具有任一必需的权限
+                    has_any_permission = False
+                    for perm in required_permissions:
+                        # 处理动态权限（${xxx}形式）
+                        if perm.startswith('${') and perm.endswith('}'):
+                            # 从request对象中获取对应的属性值
+                            attr_name = perm[2:-1]  # 去掉${和}，获取属性名
+
+                            # 尝试从request中获取属性值
+                            # 先尝试从path_params中获取
+                            if hasattr(request, 'path_params') and attr_name in request.path_params:
+                                dynamic_perm = request.path_params[attr_name]
+                            # 再尝试从query_params中获取
+                            elif hasattr(request, 'query_params') and attr_name in request.query_params:
+                                dynamic_perm = request.query_params[attr_name]
+                            # 尝试从JSON request body中获取
+                            elif hasattr(request, 'body'):
+                                try:
+                                    # 尝试解析JSON body
+                                    body = await request.json()
+                                    if isinstance(body, dict) and attr_name in body:
+                                        dynamic_perm = body[attr_name]
+                                    else:
+                                        dynamic_perm = None
+                                except:
+                                    # 如果不是JSON或解析失败，继续尝试其他方式
+                                    dynamic_perm = None
+                            # 最后尝试直接从request中获取属性
+                            else:
+                                dynamic_perm = getattr(request, attr_name, None)
+                            if not dynamic_perm:
+                                dynamic_perm = "default"
+                            # 如果动态权限值存在且用户拥有该权限，则通过权限检查
+                            if dynamic_perm and dynamic_perm in user_permissions:
+                                has_any_permission = True
+                                break
+                        # 处理静态权限
+                        elif perm in user_permissions:
+                            has_any_permission = True
+                            break
+
+                    if not has_any_permission:
+                        raise permissions_exception
             return await func(*args, **kwargs)
         return wrapper
     return decorator
@@ -250,7 +341,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 async def login_user(username, password):
-    user = await user_service.authenticate_user(username, password)
+    user = await get_user_service().authenticate_user(username, password)
     if not user:
         raise credentials_exception
     access_token = create_access_token(data={"sub": user.username})
@@ -260,5 +351,3 @@ async def login_user(username, password):
 async def logout_user(username):
     _decode_jwt_cached.cache_clear()
     user_cache.clear(username)
-
-
