@@ -86,42 +86,43 @@ async function loadData() {
         // 获取system参数
         const urlParams = new URLSearchParams(window.location.search)
         let systemParam = urlParams.get('system')
-        if (systemParam) { 
-            queryParams.append('system', systemParam);
-        } else {
+        if (!systemParam) {
             systemParam = localStorage.getItem('selectedSiteName');
-            if (systemParam) {
-                queryParams.append('system', systemParam);
-            } else {
+        }
+        try {
+            const response = await fetch('/sites');
+            if (response.ok) {
+                const systems = await response.json();
+                const systemNames = systems.map(s => s.site_name);
                 
-                // 如果没有选择系统，先获取系统列表
-                try {
-                    const response = await fetch('/sites');
-                    if (response.ok) {
-                        const systems = await response.json();
-                        if (systems.length === 1) {
-                            // 如果只有一个系统，直接使用
-                            systemParam = systems[0].site_name;
-                            queryParams.append('system', systemParam);
-                            // 保存到localStorage
-                            localStorage.setItem('selectedSiteName', systemParam);
-                        } else {
-                            // 如果没有系统或有多个系统，跳转到control.html页面
-                            window.location.href = '/control.html';
-                            return; // 终止后续代码执行
-                        }
+                // 如果有systemParam且它存在于系统列表中，直接使用
+                if (systemParam && systemNames.includes(systemParam)) {
+                    queryParams.append('system', systemParam);
+                    localStorage.setItem('selectedSiteName', systemParam);
+                } else {
+                    // systemParam不存在或无效，根据系统数量处理
+                    if (systems.length === 1) {
+                        // 如果只有一个系统，直接使用
+                        systemParam = systems[0].site_name;
+                        queryParams.append('system', systemParam);
+                        localStorage.setItem('selectedSiteName', systemParam);
                     } else {
-                        // API请求失败，跳转到control.html
+                        localStorage.removeItem('selectedSiteName');
+                        // 如果没有系统或有多个系统，跳转到control.html页面
                         window.location.href = '/control.html';
-                        return;
+                        return; // 终止后续代码执行
                     }
-                } catch (error) {
-                    console.error('获取系统列表失败:', error);
-                    // 请求出错，跳转到control.html
-                    window.location.href = '/control.html';
-                    return;
                 }
+            } else {
+                // API请求失败，跳转到control.html
+                window.location.href = '/control.html';
+                return;
             }
+        } catch (error) {
+            console.error('获取系统列表失败:', error);
+            // 请求出错，跳转到control.html
+            window.location.href = '/control.html';
+            return;
         }
 
         const currentSystemNameElement = document.getElementById('currentSystemName');

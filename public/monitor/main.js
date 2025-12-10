@@ -50,7 +50,6 @@ function setupLogout() {
                 });
                 if (response.ok) {
                     localStorage.removeItem('username');
-                    localStorage.removeItem('selectedSiteName');
                     // 登出成功，重定向到登录页面
                     window.location.href = '/login.html';
                 } else {

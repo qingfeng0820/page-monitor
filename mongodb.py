@@ -60,7 +60,7 @@ async def init_db():
         logger.info("MongoDB indexes created successfully")
     except Exception as e:
         logger.error(f"Failed to connect to MongoDB or create indexes: {str(e)}")
-        raise
+        logger.error("Application will continue to run without MongoDB connection")
 
 
 class MongoDBUserService(UserService):

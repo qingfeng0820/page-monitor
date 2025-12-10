@@ -199,12 +199,15 @@ async def get_sites(request: Request):
     if not current_user:
         raise HTTPException(status_code=401, detail="请先登录")
     
-    # 查询用户的所有网站
+    # 查询用户的所有网站（包括自己创建的和有权限访问的）
     try:
         # 使用异步方式获取所有网站
         sites_cursor = mongodb.sites_collection.find(
-            {"creator": current_user.username},
-            {"_id": 0, "site_name": 1, "site_url": 1, "api_key": 1}
+            {"$or": [
+                {"creator": current_user.username},
+                {"site_name": {"$in": current_user.permissions}}
+            ]},
+            {"_id": 0, "site_name": 1, "site_url": 1, "api_key": 1, "creator": 1}
         )
         return await sites_cursor.to_list(length=None)
     except Exception as e:
@@ -400,9 +403,9 @@ async def add_site_user(request: Request, site_name: str, user_request: AddSiteU
             raise HTTPException(status_code=404, detail="网站不存在")
         
         # 检查当前用户是否是网站的创建者（只有创建者可以授权）
-        current_user = await get_current_user(request)
-        if site.get("creator") != current_user.username:
-            raise HTTPException(status_code=403, detail="只有网站创建者可以添加授权用户")
+        # current_user = await get_current_user(request)
+        # if site.get("creator") != current_user.username:
+        #     raise HTTPException(status_code=403, detail="只有网站创建者可以添加授权用户")
         
         # 检查目标用户是否存在
         user = await mongodb.users_collection.find_one({"username": user_request.username})
@@ -456,6 +459,9 @@ async def remove_site_user(request: Request, site_name: str, username: str):
         current_user = await get_current_user(request)
         if site.get("creator") != current_user.username:
             raise HTTPException(status_code=403, detail="只有网站创建者可以移除授权用户")
+
+        if site.get("creator") == current_user.username:
+            raise HTTPException(status_code=403, detail="不能移除自己")
         
         # 检查目标用户是否存在
         user = await mongodb.users_collection.find_one({"username": username})

@@ -12,7 +12,7 @@ COPY public/monitor/chart.js public/monitor/
 COPY public/monitor/webfonts/ public/monitor/webfonts/
 COPY public/monitor/fontawesome.css public/monitor/
 COPY public/monitor/*.html public/monitor/
-COPY public/monitor/index.css src/monitor/
+COPY public/monitor/*.css src/monitor/
 COPY public/pagemonitor.js src/
 COPY public/monitor/*.js src/monitor/
 
@@ -25,17 +25,20 @@ RUN terser --compress --mangle -o public/pagemonitor.min.js src/pagemonitor.js &
     terser --compress --mangle -o public/monitor/main.min.js src/monitor/main.js && \
     terser --compress --mangle -o public/monitor/pageViewCharts.min.js src/monitor/pageViewCharts.js && \
     terser --compress --mangle -o public/monitor/ui.min.js src/monitor/ui.js && \
+    terser --compress --mangle -o public/monitor/control.min.js src/monitor/control.js && \
     # 使用csso工具压缩CSS文件
-    csso src/monitor/index.css -o public/monitor/index.min.css
+    csso src/monitor/index.css -o public/monitor/index.min.css && \
+    csso src/monitor/control.css -o public/monitor/control.min.css
 
 RUN sed -i 's/index.css/index.min.css/g' public/monitor/*.html && \
-    sed -i 's/pageViewCharts.js/pageViewCharts.min.js/g' public/monitor/index.html && \
-    sed -i 's/downloadsCharts.js/downloadsCharts.min.js/g' public/monitor/index.html && \
-    sed -i 's/eventCharts.js/eventCharts.min.js/g' public/monitor/index.html && \
-    sed -i 's/dataProcessor.js/dataProcessor.min.js/g' public/monitor/index.html && \
-    sed -i 's/ui.js/ui.min.js/g' public/monitor/index.html && \
-    sed -i 's/main.js/main.min.js/g' public/monitor/index.html && \
-    sed -i '/<!-- 外部JavaScript文件引用 -->/d' public/monitor/index.html
+    sed -i 's/control.css/control.min.css/g' public/monitor/*.html && \
+    sed -i 's/pageViewCharts.js/pageViewCharts.min.js/g' public/monitor/*.html && \
+    sed -i 's/downloadsCharts.js/downloadsCharts.min.js/g' public/monitor/*.html && \
+    sed -i 's/eventCharts.js/eventCharts.min.js/g' public/monitor/*.html && \
+    sed -i 's/dataProcessor.js/dataProcessor.min.js/g' public/monitor/*.html && \
+    sed -i 's/ui.js/ui.min.js/g' public/monitor/*.html && \
+    sed -i 's/main.js/main.min.js/g' public/monitor/*.html && \
+    sed -i 's/control.js/control.min.js/g' public/monitor/*.html
 
 # 第二阶段：运行阶段
 FROM python:3.9-alpine
