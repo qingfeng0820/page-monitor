@@ -19,7 +19,49 @@ class PageMonitor {
                 this.isMonitoringEnabled = false;
             }
             
-            this.apiBaseUrl = options.apiBaseUrl || '/api';
+            // 设置apiBaseUrl，如果未提供则尝试自动检测脚本URL
+            if (options.apiBaseUrl) {
+                this.apiBaseUrl = options.apiBaseUrl;
+                this.log_debug(`Using provided apiBaseUrl: ${this.apiBaseUrl}`);
+            } else {
+                // 尝试自动检测pagemonitor.js的URL
+                let detectedApiBaseUrl = '/api';
+                try {
+                    // 方法1: 首先尝试查找包含pagemonitor关键词的脚本标签
+                    const scriptTags = document.querySelectorAll('script[src*="pagemonitor"], script[src*="page-monitor"]');
+                    
+                    // 如果找到匹配的脚本标签
+                    if (scriptTags.length > 0) {
+                        for (const script of scriptTags) {
+                            try {
+                                // 检查script.src是否存在且不为空
+                                if (script.src) {
+                                    const scriptUrl = new URL(script.src);
+                                    // 接受任何有效的协议（http, https, file等）
+                                    detectedApiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}/api`;
+                                    this.log_debug(`Detected apiBaseUrl from script tag: ${detectedApiBaseUrl}`);
+                                    break;
+                                }
+                            } catch (e) {
+                                this.log_debug('Error parsing script URL (method 1):', e);
+                            }
+                        }
+                    } 
+                    
+                    // 注意：不再使用当前页面URL作为回退，因为当前页面可能与脚本服务器不同域
+                    // 如果无法从脚本标签检测到URL，将使用默认的'/api'路径
+                    if (detectedApiBaseUrl === '/api') {
+                        this.log_debug('Could not detect script URL, using default /api path');
+                    }
+                    
+                } catch (e) {
+                    this.log_error('Error detecting script URL:', e);
+                }
+                
+                this.apiBaseUrl = detectedApiBaseUrl;
+                this.log_debug(`Final apiBaseUrl: ${this.apiBaseUrl}`);
+            }
+            
             this.system = options.system;
             this.apiKey = options.apiKey;
             this.currentUrl = window.location ? window.location.href : '';
@@ -33,6 +75,10 @@ class PageMonitor {
             this.pageEntryTime = Date.now(); // 页面进入时间
             this.pageLastActiveTime = Date.now(); // 页面最后活跃时间
             this.isPageVisible = true; // 页面是否可见
+            
+            // 初始化监听器数组，用于存储事件监听器引用以便清理
+            this.customEventListeners = [];
+            this.downloadLinkListeners = [];
             
             // 只有当监控启用时才初始化
             if (this.isMonitoringEnabled) {
@@ -140,6 +186,54 @@ class PageMonitor {
             this.initPageDurationTracking();
         } catch (error) {
             this.log_error('PageMonitor init error:', error);
+        }
+    }
+    
+    // 销毁方法，用于清理资源
+    destroy() {
+        try {
+            // 标记监控已停止
+            this.isMonitoringEnabled = false;
+            
+            // 清理定时器
+            if (this.pageActivityTimer) {
+                clearInterval(this.pageActivityTimer);
+                this.pageActivityTimer = null;
+            }
+            
+            // 清理popstate事件监听器
+            if (this.popstateListener) {
+                window.removeEventListener('popstate', this.popstateListener);
+                this.popstateListener = null;
+            }
+            
+            // 清理各种事件监听器
+            // 注意：由于我们没有存储事件处理函数的引用，只能通过removeEventListener移除已知的事件
+            // 对于动态添加的事件监听器，需要在添加时存储引用以便清理
+            
+            // 清理自定义事件监听器
+            if (this.customEventListeners) {
+                this.customEventListeners.forEach(listener => {
+                    if (listener.element && listener.type && listener.callback) {
+                        listener.element.removeEventListener(listener.type, listener.callback);
+                    }
+                });
+                this.customEventListeners = [];
+            }
+            
+            // 清理下载链接监听器
+            if (this.downloadLinkListeners) {
+                this.downloadLinkListeners.forEach(listener => {
+                    if (listener.element && listener.callback) {
+                        listener.element.removeEventListener('click', listener.callback);
+                    }
+                });
+                this.downloadLinkListeners = [];
+            }
+            
+            this.log_info('PageMonitor destroyed successfully.');
+        } catch (error) {
+            this.log_error('PageMonitor destroy error:', error);
         }
     }
     
@@ -581,7 +675,7 @@ class PageMonitor {
     trackDownloadLinks() {
         if (!document || !document.addEventListener) return;
         
-        document.addEventListener('click', (e) => {
+        const downloadLinkListener = (e) => {
             try {
                 const link = e.target ? e.target.closest('a') : null;
                 if (link && link.href) {
@@ -684,8 +778,17 @@ class PageMonitor {
                 this.log_error('Download click handler error:', clickError);
                 // 捕获所有错误，确保不会影响页面其他功能
             }
-        });
-    }
+    };
+    
+    // 添加事件监听器
+    document.addEventListener('click', downloadLinkListener);
+    
+    // 存储监听器引用，以便后续清理
+    this.downloadLinkListeners.push({
+        element: document,
+        callback: downloadLinkListener
+    });
+}
 
     // 从URL中提取文件名
     getFileNameFromUrl(url) {
@@ -997,13 +1100,14 @@ class PageMonitor {
             };
 
             // 监听popstate事件（浏览器前进后退）
-            window.addEventListener('popstate', () => {
+            this.popstateListener = () => {
                 try {
                     this.handleRouteChange();
                 } catch (error) {
                     this.log_error('Popstate error:', error);
                 }
-            });
+            };
+            window.addEventListener('popstate', this.popstateListener);
         } catch (error) {
             this.log_error('Setup SPA listener error:', error);
         }
@@ -1063,7 +1167,7 @@ class PageMonitor {
             });
             
             // 设置定时器，定期检查页面活跃状态
-            setInterval(() => {
+            this.pageActivityTimer = setInterval(() => {
                 try {
                     this.checkPageActivity();
                 } catch (error) {
@@ -1205,8 +1309,8 @@ class PageMonitor {
                         return;
                     }
                     
-                    // 添加事件监听器，使用try-catch包装回调函数
-                    document.addEventListener(eventType, (e) => {
+                    // 创建事件监听器函数
+                    const customEventListener = (e) => {
                         try {
                             if (e && e.target && (e.target.matches?.(selector) || e.target.closest?.(selector))) {
                                 this.trackCustomEvent(e.target, selector, eventType, properties);
@@ -1214,6 +1318,16 @@ class PageMonitor {
                         } catch (eventError) {
                             this.log_error('Custom event listener error:', eventError);
                         }
+                    };
+                    
+                    // 添加事件监听器
+                    document.addEventListener(eventType, customEventListener);
+                    
+                    // 存储监听器引用，以便后续清理
+                    this.customEventListeners.push({
+                        element: document,
+                        type: eventType,
+                        callback: customEventListener
                     });
                 } catch (configError) {
                     this.log_error(`Error processing selector config at index ${index}:`, configError);

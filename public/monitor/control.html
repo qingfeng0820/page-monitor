@@ -47,11 +47,21 @@
             <h2><i class="fas fa-book"></i> 监控脚本使用说明</h2>
             <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin-top: 20px;">
                 <h3 style="margin-top: 0; color: #333;">基本用法</h3>
-                <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 15px 0;"><code>&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-system="系统名称" data-api-key="API密钥"&gt;&lt;/script&gt;</code></pre>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-basic">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-system="系统名称" data-api-key="API密钥"&gt;&lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-basic', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
                 
                 <h3 style="color: #333; margin-top: 25px;">autoInitialize 功能</h3>
                 <p>脚本默认会自动初始化监控功能，无需额外配置。如果需要禁用自动初始化，可以使用以下属性：</p>
-                <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 15px 0;"><code>&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;</code></pre>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-auto-init">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-auto-init', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
                 
                 <h3 style="color: #333; margin-top: 25px;">支持的 data-xxx 属性</h3>
                 <ul style="margin: 15px 0; padding-left: 25px;">
@@ -68,7 +78,8 @@
                 
                 <h3 style="color: #333; margin-top: 25px;">自定义事件配置</h3>
                 <p>可以通过 data-custom-events 属性配置自定义事件监控：</p>
-                <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 15px 0;"><code>&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" 
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-custom-events">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" 
     data-system="系统名称" 
     data-api-key="API密钥" 
     data-custom-events='[
@@ -91,6 +102,10 @@
             }
         }
     ]'&gt;&lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-custom-events', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
                 
                 <p style="margin-top: 15px; color: #666;"><strong>配置说明：</strong></p>
                 <ul style="margin: 15px 0; padding-left: 25px; color: #666;">
@@ -106,30 +121,408 @@
                 </ul>
                 
                 <h3 style="color: #333; margin-top: 25px;">手动初始化（当禁用autoInitialize时）</h3>
-                <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 15px 0;"><code>&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-manual-init">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;
 &lt;script&gt;
     // 等待DOM加载完成
     document.addEventListener('DOMContentLoaded', function() {
         // 创建监控实例
-        window.pageMonitorInstance = new PageMonitor({
-            system: '系统名称',
-            apiKey: 'API密钥',
-            isSPA: false,
-            isTrackDownloads: true,
-            activeTimeThreshold: 600, // 活跃时间阈值（秒） 即10分钟
-            customEvents: [
-                {
-                    selector: '.btn',
-                    eventType: 'click',
-                    properties: {
-                        category: 'button',
-                        action: 'click'
+        if (typeof window.PageMonitor !== 'undefined') {
+            window.pageMonitorInstance = new window.PageMonitor({
+                system: '系统名称',
+                apiKey: 'API密钥',
+                isSPA: false,
+                isTrackDownloads: true,
+                activeTimeThreshold: 600, // 活跃时间阈值（秒） 即10分钟
+                customEvents: [
+                    {
+                        selector: '.btn',
+                        eventType: 'click',
+                        properties: {
+                            category: 'button',
+                            action: 'click'
+                        }
                     }
-                }
-            ]
-        });
+                ]
+            });
+        } else {
+            console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+        }
     });
 &lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-manual-init', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h3 style="color: #333; margin-top: 25px;">Vue 集成方法</h3>
+                <p>将 pagemonitor.js 添加到 Vue 项目中有两种方式：全局引入和组件级引入。以下分别介绍 Vue 2 和 Vue 3 的集成方法。</p>
+                
+                <h4 style="color: #555; margin-top: 20px;">Vue 2 集成</h4>
+                
+                <h5 style="color: #666; margin-top: 15px;">全局引入（在 main.js 中）</h5>
+                <p>需要先下载 pagemonitor.min.js。</p>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue2-global">// 引入 pagemonitor.js
+import './path/to/pagemonitor.min.js';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  isSPA?: boolean;
+  isTrackDownloads?: boolean;
+  maxPendingItems?: number;
+  activeTimeThreshold?: number;
+}
+
+declare global {
+  interface Window {
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+    pageMonitorInstance?: any;
+  }
+}
+*/
+
+// 在 Vue 实例挂载后初始化
+new Vue({
+  el: '#app',
+  mounted() {
+    // 确保 DOM 已加载完成
+    this.$nextTick(() => {
+      // 确保通过window对象访问PageMonitor类
+      if (typeof window.PageMonitor !== 'undefined') {
+        window.pageMonitorInstance = new window.PageMonitor({
+          system: 'Vue 2 系统名称',
+          apiKey: 'API密钥',
+          apiBaseUrl: '&lt;monitor-server-address&gt/api', // 显式指定API地址
+          isSPA: true, // Vue 通常是 SPA 应用
+          isTrackDownloads: true
+        });
+      } else {
+        console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+      }
+    });
+  }
+});</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-vue2-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h5 style="color: #666; margin-top: 15px;">组件级引入</h5>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue2-component">&lt;template&gt;
+  &lt;div&gt;Vue 2 组件&lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script&gt;
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  isSPA?: boolean;
+  isTrackDownloads?: boolean;
+  maxPendingItems?: number;
+  activeTimeThreshold?: number;
+}
+
+declare global {
+  interface Window {
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+    pageMonitorInstance?: any;
+    _pageMonitorScript?: HTMLScriptElement;
+  }
+}
+*/
+
+export default {
+  name: 'YourComponent',
+  mounted() {
+    // 动态加载 pagemonitor.js
+    const script = document.createElement('script');
+    script.src = '&lt;monitor-server-address&gt/public/pagemonitor.min.js';
+    script.onload = () => {
+      // 确保通过window对象访问PageMonitor类
+      if (typeof window.PageMonitor !== 'undefined') {
+        window.pageMonitorInstance = new window.PageMonitor({
+          system: 'Vue 2 组件系统',
+          apiKey: 'API密钥',
+          isSPA: true
+        });
+      } else {
+        console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+      }
+    };
+    script.onerror = () => {
+      console.error('Failed to load pagemonitor.js script.');
+    };
+    document.body.appendChild(script);
+    // 将script元素保存到组件实例，以便在beforeDestroy中访问
+    this.pageMonitorScript = script;
+  },
+  beforeDestroy() {
+    // 组件销毁前的清理工作
+    if (window.pageMonitorInstance) {
+      window.pageMonitorInstance.destroy();
+      delete window.pageMonitorInstance;
+    }
+    // 移除动态创建的script元素
+    if (this.pageMonitorScript) {
+      document.body.removeChild(this.pageMonitorScript);
+    }
+  }
+}
+&lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-vue2-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h4 style="color: #555; margin-top: 20px;">Vue 3 集成</h4>
+                
+                <h5 style="color: #666; margin-top: 15px;">全局引入（在 main.js 中）</h5>
+                <p>需要先下载 pagemonitor.min.js。</p>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue3-global">// 引入 pagemonitor.js
+import './path/to/pagemonitor.min.js';
+import { createApp } from 'vue';
+import App from './App.vue';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  isSPA?: boolean;
+  isTrackDownloads?: boolean;
+  maxPendingItems?: number;
+  activeTimeThreshold?: number;
+}
+
+declare global {
+  interface Window {
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+    pageMonitorInstance?: any;
+  }
+}
+*/
+
+const app = createApp(App);
+app.mount('#app');
+
+// 应用挂载后初始化监控
+if (typeof window.PageMonitor !== 'undefined') {
+  window.pageMonitorInstance = new window.PageMonitor({
+    system: 'Vue 3 系统名称',
+    apiKey: 'API密钥',
+    apiBaseUrl: '&lt;monitor-server-address&gt/api', // 显式指定API地址
+    isSPA: true, // Vue 3 通常是 SPA 应用
+    isTrackDownloads: true
+  });
+} else {
+  console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+}</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-vue3-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h5 style="color: #666; margin-top: 15px;">组件级引入（使用 &lt;script setup&gt;）</h5>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue3-component">&lt;template&gt;
+  &lt;div&gt;Vue 3 组件&lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script setup&gt;
+import { onMounted, onUnmounted } from 'vue';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  isSPA?: boolean;
+  isTrackDownloads?: boolean;
+  maxPendingItems?: number;
+  activeTimeThreshold?: number;
+}
+
+declare global {
+  interface Window {
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+    pageMonitorInstance?: any;
+    _pageMonitorScript?: HTMLScriptElement;
+  }
+}
+*/
+
+onMounted(() => {
+  // 动态加载 pagemonitor.js
+  const script = document.createElement('script');
+  script.src = '&lt;monitor-server-address&gt/public/pagemonitor.min.js';
+  script.onload = () => {
+    // 确保通过window对象访问PageMonitor类
+    if (typeof window.PageMonitor !== 'undefined') {
+      window.pageMonitorInstance = new window.PageMonitor({
+        system: 'Vue 3 组件系统',
+        apiKey: 'API密钥',
+        isSPA: true
+      });
+    } else {
+      console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+    }
+  };
+  script.onerror = () => {
+    console.error('Failed to load pagemonitor.js script.');
+  };
+  document.body.appendChild(script);
+  // 将script元素保存到window对象，以便在onUnmounted中访问
+  window._pageMonitorScript = script;
+});
+
+onUnmounted(() => {
+  // 组件销毁前的清理工作
+  if (window.pageMonitorInstance) {
+    window.pageMonitorInstance.destroy();
+    delete window.pageMonitorInstance;
+  }
+  // 移除动态创建的script元素
+  if (window._pageMonitorScript) {
+    document.body.removeChild(window._pageMonitorScript);
+    delete window._pageMonitorScript;
+  }
+});
+&lt;/script&gt;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-vue3-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h3 style="color: #333; margin-top: 25px;">React 集成方法</h3>
+                <p>将 pagemonitor.js 添加到 React 项目中有两种方式：全局引入和组件级引入。</p>
+                <h4 style="color: #555; margin-top: 20px;">全局引入（在 index.js 中）</h4>
+                <p>需要先下载 pagemonitor.min.js。</p>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-react-global">// 引入 pagemonitor.js
+import './path/to/pagemonitor.min.js';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  apiBaseUrl?: string;
+  isSPA?: boolean;
+  isTrackDownloads?: boolean;
+  maxPendingItems?: number;
+  activeTimeThreshold?: number;
+}
+
+declare global {
+  interface Window {
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+    pageMonitorInstance?: any;
+  }
+}
+*/
+
+// 在应用渲染后初始化
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(&lt;App /&gt;);
+
+// 初始化监控
+if (typeof window.PageMonitor !== 'undefined') {
+  window.pageMonitorInstance = new window.PageMonitor({
+    system: 'React 系统名称',
+    apiKey: 'API密钥',
+    apiBaseUrl: '&lt;monitor-server-address&gt/api', // 显式指定API地址
+    isSPA: true, // React 通常是 SPA 应用
+    isTrackDownloads: true
+  });
+} else {
+  console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+}</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-react-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+                
+                <h4 style="color: #555; margin-top: 20px;">组件级引入</h4>
+                <div style="position: relative; margin: 15px 0;">
+                    <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-react-component">import React, { useEffect } from 'react';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  isSPA: boolean;
+  isTrackDownloads: boolean;
+}
+
+declare global {
+  interface Window {
+    pageMonitorInstance?: any;
+    _pageMonitorScript?: HTMLScriptElement;
+  }
+  var PageMonitor: new (options: PageMonitorOptions) => any;
+}
+*/
+
+function App() {
+  useEffect(() => {
+    // 动态加载并初始化 pagemonitor.js
+    const script = document.createElement('script');
+    script.src = '&lt;monitor-server-address&gt/public/pagemonitor.min.js';
+    script.onload = () => {
+      // 确保通过window对象访问PageMonitor类
+      if (typeof window.PageMonitor !== 'undefined') {
+        window.pageMonitorInstance = new window.PageMonitor({
+          system: 'React 应用',
+          apiKey: 'API密钥',
+          isSPA: true
+        });
+      } else {
+        console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+      }
+    };
+    script.onerror = () => {
+      console.error('Failed to load pagemonitor.js script.');
+    };
+    document.body.appendChild(script);
+    
+    // 将script元素保存到window对象，以便在清理时访问
+    window._pageMonitorScript = script;
+    
+    return () => {
+      // 清理
+      if (window.pageMonitorInstance && typeof window.pageMonitorInstance.destroy === 'function') {
+        window.pageMonitorInstance.destroy();
+        delete window.pageMonitorInstance;
+      }
+      // 移除script元素
+      if (window._pageMonitorScript) {
+        document.body.removeChild(window._pageMonitorScript);
+        delete window._pageMonitorScript;
+      }
+    };
+  }, []);
+  
+  return &lt;div&gt;React 应用&lt;/div&gt;;
+}
+
+export default App;</code></pre>
+                    <button class="copy-btn" onclick="copyCode('code-react-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

@@ -61,8 +61,8 @@ ENV MONGO_DB_CONN_STR="mongodb://localhost:27017/"
 ENV ALLOW_ORIGINS=""
 EXPOSE 8000
 
-# 启动应用
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+# 启动应用，使用4个worker进程提高并发处理能力
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
 
 # build 命令： sudo docker build -t simple-track .
-# 运行命令: sudo docker run -d --name simple-track -p 8000:8000 -e MONGO_DB_CONN_STR="mongodb://localhost:27017/" -e ALLOW_ORIGINS="*" simple-track:latest
+# 运行命令: sudo docker run -d --name simple-track -p 8000:8000 -e MONGO_DB_CONN_STR="mongodb://localhost:27017/" simple-track:latest

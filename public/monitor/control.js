@@ -101,15 +101,166 @@ async function fetchSystems() {
                             </button>` : ''}
                         </div>
                         <div class="system-url">${system.site_url}</div>
-                        <div class="system-creator">创建者: ${system.creator || '未知'}</div>
                         <div class="api-key">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                                <span class="api-key-label">嵌入代码</span>
-                                <button class="copy-btn" onclick="copyCode('code-${system.site_name}', this);" title="复制嵌入代码">
-                                    <i class="fas fa-copy"></i>
-                                </button>
+                            <div style="display: flex; align-items: bottom; justify-content: space-between; margin-bottom: 2px;">
+                                <div style="display: flex; align-items: center; gap: 10px; height: 24px;">
+                                    <span class="api-key-label" style="margin: 0; padding: 0; line-height: 24px;">嵌入代码</span>
+                                    <button class="copy-btn" onclick="copyCode('code-html-${system.site_name}', this);" title="复制当前标签页代码" style="padding: 3px 8px; font-size: 12px; height: 20px; line-height: 16px; margin: 0;">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div class="code-tabs" style="font-size: 11px; background: rgba(255, 255, 255, 0.1); padding: 2px; border-radius: 15px;">
+                                    <button class="tab-btn active" onclick="switchTab('${system.site_name}', 'html');" style="padding: 3px 12px; border-radius: 12px;">HTML</button>
+                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'vue');" style="padding: 3px 12px; border-radius: 12px;">Vue</button>
+                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'react');" style="padding: 3px 12px; border-radius: 12px;">React</button>
+                                </div>
                             </div>
-                            <pre><code id="code-${system.site_name}">&lt;script src="${window.location.origin}/public/pagemonitor.min.js" data-system="${system.site_name}" data-api-key="${system.api_key}"&gt;&lt;/script&gt;</code></pre>
+                            <!-- HTML代码 -->
+                            <div id="tab-html-${system.site_name}" class="tab-content active">
+                                <pre><code id="code-html-${system.site_name}">&lt;script src="${window.location.origin}/public/pagemonitor.min.js" data-system="${system.site_name}" data-api-key="${system.api_key}"&gt;&lt;/script&gt;</code></pre>
+                            </div>
+                            <!-- Vue代码 -->
+                            <div id="tab-vue-${system.site_name}" class="tab-content">
+                                <pre><code id="code-vue-${system.site_name}">&lt;template&gt;
+  &lt;div&gt;你的Vue组件&lt;/div&gt;
+&lt;/template&gt;
+
+&lt;script setup&gt;
+import { onMounted, onUnmounted } from 'vue';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  isSPA: boolean;
+  isTrackDownloads: boolean;
+}
+
+declare global {
+  interface Window {
+    pageMonitorInstance?: any;
+    _pageMonitorScript?: HTMLScriptElement;
+    PageMonitor?: new (options: PageMonitorOptions) => any;
+  }
+  var PageMonitor: new (options: PageMonitorOptions) => any;
+}
+*/
+
+onMounted(() => {
+  // 动态加载并初始化 pagemonitor.js
+  const script = document.createElement('script');
+  script.src = '${window.location.origin}/public/pagemonitor.min.js';
+  script.onload = () => {
+    // 确保通过window对象访问PageMonitor类
+    if (typeof window.PageMonitor !== 'undefined') {
+      window.pageMonitorInstance = new window.PageMonitor({
+        system: '${system.site_name}',
+        apiKey: '${system.api_key}',
+        isSPA: true,
+        isTrackDownloads: true
+      });
+    } else {
+      console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+    }
+  };
+  script.onerror = () => {
+    console.error('Failed to load pagemonitor.js script.');
+  };
+  document.body.appendChild(script);
+  
+  // 将script元素保存到window对象，以便在onUnmounted中访问
+  window._pageMonitorScript = script;
+});
+
+onUnmounted(() => {
+  // 组件销毁前的清理工作
+  if (window.pageMonitorInstance) {
+    // 如果PageMonitor有destroy方法，调用它
+    if (typeof window.pageMonitorInstance.destroy === 'function') {
+      window.pageMonitorInstance.destroy();
+    }
+    // 删除全局实例
+    delete window.pageMonitorInstance;
+  }
+  
+  // 移除动态创建的script元素
+  if (window._pageMonitorScript) {
+    document.body.removeChild(window._pageMonitorScript);
+    delete window._pageMonitorScript;
+  }
+});
+&lt;/script setup&gt;</code></pre>
+                            </div>
+                            <!-- React代码 -->
+                            <div id="tab-react-${system.site_name}" class="tab-content">
+                                <pre><code id="code-react-${system.site_name}">import React, { useEffect } from 'react';
+
+// TypeScript类型声明（在TypeScript环境下需要放开下面的类型声明注释）
+/*
+interface PageMonitorOptions {
+  system: string;
+  apiKey: string;
+  isSPA: boolean;
+  isTrackDownloads: boolean;
+}
+
+declare global {
+  interface Window {
+    pageMonitorInstance?: any;
+    _pageMonitorScript?: HTMLScriptElement;
+  }
+  var PageMonitor: new (options: PageMonitorOptions) => any;
+}
+*/
+
+function App() {
+  useEffect(() => {
+    // 动态加载并初始化 pagemonitor.js
+    const script = document.createElement('script');
+    script.src = '${window.location.origin}/public/pagemonitor.min.js';
+    script.onload = () => {
+      // 确保通过window对象访问PageMonitor类
+      if (typeof window.PageMonitor !== 'undefined') {
+        window.pageMonitorInstance = new window.PageMonitor({
+          system: '${system.site_name}',
+          apiKey: '${system.api_key}',
+          isSPA: true,
+          isTrackDownloads: true
+        });
+      } else {
+        console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
+      }
+    };
+    script.onerror = () => {
+      console.error('Failed to load pagemonitor.js script.');
+    };
+    document.body.appendChild(script);
+    
+    // 将script元素保存到window对象，以便在清理时访问
+    window._pageMonitorScript = script;
+    
+    return () => {
+      // 清理PageMonitor实例
+      if (window.pageMonitorInstance) {
+        if (typeof window.pageMonitorInstance.destroy === 'function') {
+          window.pageMonitorInstance.destroy();
+        }
+        delete window.pageMonitorInstance;
+      }
+      // 移除script元素
+      if (window._pageMonitorScript) {
+        document.body.removeChild(window._pageMonitorScript);
+        delete window._pageMonitorScript;
+      }
+    };
+  }, []);
+  
+  return &lt;div&gt;React 应用&lt;/div&gt;;
+}
+
+export default App;</code></pre>
+                            </div>
                         </div>
                         <div style="text-align: right; color: var(--primary-color); font-size: 14px; cursor: pointer;" onclick="selectSystem('${system.site_name}');">
                             <i class="fas fa-chart-line"></i> 查看监控数据 &gt;
@@ -165,6 +316,34 @@ async function fetchSystems() {
                             console.error('复制失败:', err);
                         } finally {
                             document.body.removeChild(tempTextArea);
+                        }
+                    }
+                };
+                
+                // Tab切换函数
+                window.switchTab = function(siteName, tabType) {
+                    // 移除所有Tab按钮的active类
+                    const tabButtons = document.querySelectorAll(`[onclick="switchTab('${siteName}', 'html');"], [onclick="switchTab('${siteName}', 'vue');"], [onclick="switchTab('${siteName}', 'react');"]`);
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    
+                    // 移除所有Tab内容的active类
+                    const tabContents = document.querySelectorAll(`#tab-html-${siteName}, #tab-vue-${siteName}, #tab-react-${siteName}`);
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // 添加当前Tab按钮和内容的active类
+                    const activeBtn = document.querySelector(`[onclick="switchTab('${siteName}', '${tabType}');"]`);
+                    const activeContent = document.getElementById(`tab-${tabType}-${siteName}`);
+                    if (activeBtn) activeBtn.classList.add('active');
+                    if (activeContent) activeContent.classList.add('active');
+                    
+                    // 更新复制按钮的onclick事件，使其复制当前选中标签页的代码
+                    const systemCard = document.querySelector(`[data-system-name="${siteName}"]`);
+                    if (systemCard) {
+                        const copyBtn = systemCard.querySelector('.copy-btn');
+                        if (copyBtn) {
+                            copyBtn.onclick = function() {
+                                copyCode(`code-${tabType}-${siteName}`, this);
+                            };
                         }
                     }
                 };
@@ -496,5 +675,3 @@ async function removeAuthorizedUser(siteName, username) {
         alert('移除授权用户出错: ' + error.message);
     }
 }
-
-

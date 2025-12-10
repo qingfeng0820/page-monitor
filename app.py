@@ -103,14 +103,12 @@ app = FastAPI(title="页面访问监控API", lifespan=lifespan)
 # 获取CORS允许的源列表
 allow_origins_env = os.getenv("ALLOW_ORIGINS")
 allow_origins = []
-
+if not allow_origins_env:
+    allow_origins_env = "*"
 logger.info("ALLOW_ORIGINS: %s", allow_origins_env)
-
-if allow_origins_env:
-    # 如果环境变量不为空，按逗号分割多个源
-    allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
-    # 移除可能存在的空字符串
-    allow_origins = [origin for origin in allow_origins if origin]
+allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
+# 移除可能存在的空字符串
+allow_origins = [origin for origin in allow_origins if origin]
 
 app.add_middleware(
     CORSMiddleware,
