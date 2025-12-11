@@ -48,7 +48,7 @@ def get_client_ip(request: Request) -> str:
 async def check_site_api_key(request: Request, data: dict):
     url = sanitize_key(data.get('url', 'unknown'))
     system = sanitize_key(data.get('system', 'default'))
-    api_key = request.headers.get("X-API-Key")
+    api_key = request.headers.get("X-API-Key") or data.get('apiKey')
     
     # 如果没有提供system或apikey，抛出403错误
     if not system:

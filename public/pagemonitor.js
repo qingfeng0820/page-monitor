@@ -831,50 +831,9 @@ class PageMonitor {
                 this.log_warn('Data contains "unknown" values, skipping sendToServer');
                 return false;
             }
-            
-            // 检查fetch API是否可用
-            if (typeof fetch !== 'function') {
-                this.log_warn('Fetch API not available, using fallback tracking');
-                this.fallbackTracking(type, data);
-                return false;
-            }
-            
             // 安全构建URL
             const url = `${this.apiBaseUrl}${endpoint}`;
-            
-            // 添加system到数据中
-            const dataWithSystem = {
-                ...data,
-                system: this.system
-            };
-            
-            // 安全序列化数据
-            let body;
-            try {
-                body = JSON.stringify(dataWithSystem);
-            } catch (jsonError) {
-                this.log_error('JSON序列化失败:', jsonError);
-                // 使用简化数据进行重试
-                const simplifiedData = {
-                    type: type,
-                    timestamp: new Date().toISOString(),
-                    url: this.currentUrl,
-                    system: this.system
-                };
-                body = JSON.stringify(simplifiedData);
-            }
-            
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-API-Key': this.apiKey
-                },
-                body: body,
-                // 添加超时控制
-                signal: AbortSignal.timeout(5000) // 5秒超时
-            });
-            return response.ok;
+            return this.doSend(url, type, data);
         } catch (error) {
             // 捕获所有错误，包括网络错误和超时
             this.log_error('发送失败:', error);
@@ -890,6 +849,98 @@ class PageMonitor {
         }
     }
 
+    async doSend(url, type, data) {
+        // 规则1：页面卸载事件强制使用sendBeacon
+        const isUnloadEvent = type === 'page_unload' || type === 'beforeunload';
+        
+        if (isUnloadEvent) {
+            return this.trySendBeacon(url, data);
+        }
+        
+        // 规则2：普通事件，优先尝试sendBeacon（不阻塞）
+        // sendBeacon在后台发送，不影响用户体验
+        const beaconSuccess = this.trySendBeacon(url, data);
+        if (beaconSuccess) return true;
+        
+        // 规则3：sendBeacon失败，使用fetch（带超时）
+        return await this.fetchWithTimeout(url, data);
+    }
+
+    trySendBeacon(url, data) {
+        // 检查sendBeacon是否可用
+        if (typeof navigator.sendBeacon !== 'function') {
+            this.log_debug(`sendBeacon不可用`);
+            return false;
+        }
+        const dataWithApiKeyAndSystem = {
+            ...data,
+            system: this.system,
+            apiKey: this.apiKey
+        };
+        let body;
+        try {
+            body = JSON.stringify(dataWithApiKeyAndSystem);
+        } catch (jsonError) {
+            this.log_error('JSON序列化失败:', jsonError);
+            return false;
+        }
+        const blob = new Blob([body], {type: 'application/json'});
+        try {
+            return  navigator.sendBeacon(url, blob);
+        } catch (beaconError) {
+            this.log_error(`sendBeacon异常:`, beaconError);
+            return false;
+        }
+    }
+
+    async fetchWithTimeout(url, data) {
+        if (typeof fetch !== 'function') {
+            this.log_warn('Fetch API not available, using fallback tracking');
+            throw new Error('Fetch API not available');
+        }
+        // 添加system到数据中
+        const dataWithSystem = {
+            ...data,
+            system: this.system
+        };
+        // 安全序列化数据
+        let body;
+        try {
+            body = JSON.stringify(dataWithSystem);
+        } catch (jsonError) {
+            this.log_error('JSON序列化失败:', jsonError);
+            return false;
+        }
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-API-Key': this.apiKey
+        };
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 固定5秒超时
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: body,
+                signal: controller.signal,
+                // 不设置优先级，让浏览器自动管理
+                // priority: 'low'
+            });
+            clearTimeout(timeoutId);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return true;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                this.log_warn('fetch请求超时 (5s)');
+            } else {
+                this.log_error('fetch请求失败:', error);
+            }
+            throw error;
+        }
+    }
 
 
     // =================== 降级处理 =================
