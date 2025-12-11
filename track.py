@@ -426,14 +426,12 @@ def get_top_entries(dictionary, limit=10, except_keys=None):
         else:
             return 0
 
-    result = filtered_dict
-    if len(filtered_dict) > limit:
-        # 预先计算所有值的分数，避免重复计算
-        items_with_scores = [(k, v, get_value_score(v)) for k, v in filtered_dict.items()]
-        # 按分数降序排序
-        items_with_scores.sort(key=lambda x: x[2], reverse=True)
-        # 取前limit个条目
-        result = {item[0]: item[1] for item in items_with_scores[:limit]}
+    # 预先计算所有值的分数，避免重复计算
+    items_with_scores = [(k, v, get_value_score(v)) for k, v in filtered_dict.items()]
+    # 按分数降序排序
+    items_with_scores.sort(key=lambda x: x[2], reverse=True)
+    # 取前limit个条目
+    result = {item[0]: item[1] for item in items_with_scores[:limit]}
     
     # 添加排除的键
     for key in except_keys:
@@ -592,11 +590,6 @@ async def _stats_common(request: Request, system: str, start_date: Optional[str]
                         # 合并嵌套字典
                         aggregated_stats[key] = merge_nested_dicts(aggregated_stats[key], stats_data[key])
                     
-                    # 在聚合过程中应用limit限制，减少内存占用
-                    # 只对大型字典应用限制，避免频繁调用get_top_entries
-                    if key != 'byBrowserAndOsUniqueUsers' and len(aggregated_stats[key]) > limit * 2:  # 特殊字段在finalize中处理
-                        aggregated_stats[key] = get_top_entries(aggregated_stats[key], limit)
-
             # 合并唯一用户集合（只在存在时处理）
             stats_unique_users = stats_data.get('uniqueUsers')
             if stats_unique_users:

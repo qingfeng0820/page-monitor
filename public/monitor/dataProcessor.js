@@ -277,6 +277,9 @@ function updateDownloadTable(downloadData) {
         uniqueUsers: fileAndUser[file] || 0
     }));
     
+    // 按下载次数降序排序
+    // downloadArray.sort((a, b) => b.totalDownloads - a.totalDownloads);
+    
     downloadArray.forEach(download => {
         const row = document.createElement('tr');
         
@@ -338,7 +341,7 @@ function updatePageviewTable(pageviewData, durationData) {
     });
     
     // 按访问次数排序
-    pageViewArray.sort((a, b) => b.totalViews - a.totalViews);
+    // pageViewArray.sort((a, b) => b.totalViews - a.totalViews);
     
     pageViewArray.forEach(pageView => {
         const row = document.createElement('tr');
@@ -454,7 +457,7 @@ function updateEventTable(eventData) {
     }
 
     // 按次数排序
-    eventEntries.sort((a, b) => b.count - a.count);
+    // eventEntries.sort((a, b) => b.count - a.count);
     
     eventEntries.forEach(event => {
         const row = document.createElement('tr');
