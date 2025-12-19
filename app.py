@@ -494,6 +494,17 @@ async def remove_site_user(request: Request, site_name: str, username: str):
 
 @app.post("/register")
 async def register(request: Request, register_data: RegisterRequest):
+    # 获取客户端IP，优先从反向代理头中获取
+    client_ip = request.headers.get("X-Real-IP") or \
+                request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or \
+                (request.client.host if request.client else "")
+    
+    # 检查是否为内网IP
+    if not ALLOW_REGISTER_OUT_OF_SITE and not is_private_ip(client_ip):
+        # 非内网IP访问被拒绝
+        raise HTTPException(status_code=403, detail="外网访问被拒绝")
+
+
     if register_data.username == "" or register_data.password == "" or (register_data.email == "" and register_data.phone == ""):
         raise HTTPException(status_code=400, detail="请填写完整的注册信息 (邮箱/手机填一个)")
 
@@ -558,19 +569,19 @@ class ProtectedStaticFiles(StaticFiles):
         path = scope.get("path", "")
         
         # 为register.html添加内网IP访问控制
-        if path.endswith('/register.html'):
-            # 获取客户端IP地址
-            client_ip = request.client.host if request.client else ""
+        # if path.endswith('/register.html'):
+        #     # 获取客户端IP地址
+        #     client_ip = request.client.host if request.client else ""
             
-            # 检查是否为内网IP
-            if not ALLOW_REGISTER_OUT_OF_SITE and not is_private_ip(client_ip):
-                # 非内网IP访问被拒绝
-                response = JSONResponse(
-                    status_code=403,
-                    content={"detail": "注册页面仅允许内网访问"}
-                )
-                await response(scope, receive, send)
-                return
+        #     # 检查是否为内网IP
+        #     if not ALLOW_REGISTER_OUT_OF_SITE and not is_private_ip(client_ip):
+        #         # 非内网IP访问被拒绝
+        #         response = JSONResponse(
+        #             status_code=403,
+        #             content={"detail": "注册页面仅允许内网访问"}
+        #         )
+        #         await response(scope, receive, send)
+        #         return
         
         is_html_file = path == "/" or path.endswith('.html') and not path.endswith('/login.html') \
                        and not path.endswith('/register.html') if path else False

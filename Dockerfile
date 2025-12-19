@@ -1,5 +1,5 @@
 # 第一阶段：构建阶段
-FROM node:16-alpine AS builder
+FROM node:20-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
@@ -41,7 +41,7 @@ RUN sed -i 's/index.css/index.min.css/g' public/monitor/*.html && \
     sed -i 's/control.js/control.min.js/g' public/monitor/*.html
 
 # 第二阶段：运行阶段
-FROM python:3.9-alpine
+FROM python:3.11-alpine
 
 # 设置工作目录
 WORKDIR /app
