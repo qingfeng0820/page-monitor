@@ -822,15 +822,15 @@ class PageMonitor {
                 return false;
             }
             
-            // 检查数据中是否有"unknown"值
-            const hasUnknownValues = Object.values(data).some(value => 
-                typeof value === 'string' && value.toLowerCase() === 'unknown'
-            );
-            
-            if (hasUnknownValues) {
-                this.log_warn('Data contains "unknown" values, skipping sendToServer');
-                return false;
-            }
+//            // 检查数据中是否有"unknown"值
+//            const hasUnknownValues = Object.values(data).some(value =>
+//                typeof value === 'string' && value.toLowerCase() === 'unknown'
+//            );
+//
+//            if (hasUnknownValues) {
+//                this.log_warn('Data contains "unknown" values, skipping sendToServer');
+//                return false;
+//            }
             // 安全构建URL
             const url = `${this.apiBaseUrl}${endpoint}`;
             return this.doSend(url, type, data);

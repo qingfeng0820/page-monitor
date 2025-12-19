@@ -458,7 +458,7 @@ async def remove_site_user(request: Request, site_name: str, username: str):
         if site.get("creator") != current_user.username:
             raise HTTPException(status_code=403, detail="只有网站创建者可以移除授权用户")
 
-        if site.get("creator") == current_user.username:
+        if username == current_user.username:
             raise HTTPException(status_code=403, detail="不能移除自己")
         
         # 检查目标用户是否存在
@@ -503,7 +503,6 @@ async def register(request: Request, register_data: RegisterRequest):
     if not ALLOW_REGISTER_OUT_OF_SITE and not is_private_ip(client_ip):
         # 非内网IP访问被拒绝
         raise HTTPException(status_code=403, detail="外网访问被拒绝")
-
 
     if register_data.username == "" or register_data.password == "" or (register_data.email == "" and register_data.phone == ""):
         raise HTTPException(status_code=400, detail="请填写完整的注册信息 (邮箱/手机填一个)")

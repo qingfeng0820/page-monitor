@@ -46,7 +46,7 @@ def get_client_ip(request: Request) -> str:
 
 
 async def check_site_api_key(request: Request, data: dict):
-    url = sanitize_key(data.get('url', 'unknown'))
+    url = data.get('url', 'unknown')
     system = sanitize_key(data.get('system', 'default'))
     api_key = request.headers.get("X-API-Key") or data.get('apiKey')
     
@@ -77,8 +77,6 @@ async def check_site_api_key(request: Request, data: dict):
     if not registered_url:
         raise HTTPException(status_code=500, detail="找不到registered_url")
     
-    sanitized_registered_url = sanitize_key(registered_url)
-    
     # 只从Origin头获取请求的origin
     request_origin = request.headers.get("Origin")
     
@@ -89,7 +87,7 @@ async def check_site_api_key(request: Request, data: dict):
         
         # 解析注册的URL的origin
         try:
-            registered_parsed = urlparse(sanitized_registered_url)
+            registered_parsed = urlparse(registered_url)
             registered_origin = f"{registered_parsed.scheme}://{registered_parsed.netloc}"
             
             # 比对请求origin与注册URL的origin是否匹配
@@ -100,7 +98,7 @@ async def check_site_api_key(request: Request, data: dict):
             pass
     
     # 如果以上验证都失败，尝试完全匹配
-    if url != sanitized_registered_url:
+    if url != registered_origin:
         raise HTTPException(status_code=403, detail="URL does not match registered site URL")
     
     return True
