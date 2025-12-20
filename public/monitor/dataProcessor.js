@@ -90,7 +90,7 @@ async function loadData() {
             systemParam = localStorage.getItem('selectedSiteName');
         }
         try {
-            const response = await fetch('/sites');
+            const response = await fetch('sites');
             if (response.ok) {
                 const systems = await response.json();
                 const systemNames = systems.map(s => s.site_name);
@@ -109,19 +109,19 @@ async function loadData() {
                     } else {
                         localStorage.removeItem('selectedSiteName');
                         // 如果没有系统或有多个系统，跳转到control.html页面
-                        window.location.href = '/control.html';
+                        window.location.href = 'control.html';
                         return; // 终止后续代码执行
                     }
                 }
             } else {
                 // API请求失败，跳转到control.html
-                window.location.href = '/control.html';
+                window.location.href = 'control.html';
                 return;
             }
         } catch (error) {
             console.error('获取系统列表失败:', error);
             // 请求出错，跳转到control.html
-            window.location.href = '/control.html';
+            window.location.href = 'control.html';
             return;
         }
 
@@ -136,7 +136,7 @@ async function loadData() {
         }
         
         // 构建API URL（使用相对路径，确保在Docker容器内正常工作）
-        const apiBaseUrl = '/api/stats';
+        const apiBaseUrl = 'api/stats';
         const pageviewUrl = `${apiBaseUrl}/pageview?${queryParams.toString()}`;
         const downloadUrl = `${apiBaseUrl}/downloads?${queryParams.toString()}`;
         const eventUrl = `${apiBaseUrl}/events?${queryParams.toString()}`;

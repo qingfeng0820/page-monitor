@@ -17,28 +17,27 @@ COPY public/pagemonitor.js src/
 COPY public/monitor/*.js src/monitor/
 
 # 压缩混淆文件
-# 压缩文件（保留基本混淆，避免破坏代码功能）
-RUN terser --compress --mangle -o public/pagemonitor.min.js src/pagemonitor.js && \
-    terser --compress --mangle -o public/monitor/dataProcessor.min.js src/monitor/dataProcessor.js && \
-    terser --compress --mangle -o public/monitor/downloadsCharts.min.js src/monitor/downloadsCharts.js && \
-    terser --compress --mangle -o public/monitor/eventCharts.min.js src/monitor/eventCharts.js && \
-    terser --compress --mangle -o public/monitor/main.min.js src/monitor/main.js && \
-    terser --compress --mangle -o public/monitor/pageViewCharts.min.js src/monitor/pageViewCharts.js && \
-    terser --compress --mangle -o public/monitor/ui.min.js src/monitor/ui.js && \
-    terser --compress --mangle -o public/monitor/control.min.js src/monitor/control.js && \
-    # 使用csso工具压缩CSS文件
-    csso src/monitor/index.css -o public/monitor/index.min.css && \
-    csso src/monitor/control.css -o public/monitor/control.min.css
+# 使用shell遍历压缩所有JS文件（除了chart.js）
+RUN find src -name "*.js" -not -name "chart.js" -type f | while read -r js_file; do \
+    # 生成目标路径：将src/替换为public/，将.js替换为.min.js
+    target_file=$(echo "$js_file" | sed 's|^src/|public/|;s|\.js$|\.min\.js|'); \
+    # 确保目标目录存在
+    mkdir -p "$(dirname "$target_file")"; \
+    # 执行压缩混淆
+    terser --compress --mangle -o "$target_file" "$js_file"; \
+done && \
+# 使用shell遍历压缩所有CSS文件
+find src -name "*.css" -type f | while read -r css_file; do \
+    # 生成目标路径：将src/替换为public/，将.css替换为.min.css
+    target_file=$(echo "$css_file" | sed 's|^src/|public/|;s|\.css$|\.min\.css|'); \
+    # 确保目标目录存在
+    mkdir -p "$(dirname "$target_file")"; \
+    # 执行CSS压缩
+    csso "$css_file" -o "$target_file"; \
+done
 
-RUN sed -i 's/index.css/index.min.css/g' public/monitor/*.html && \
-    sed -i 's/control.css/control.min.css/g' public/monitor/*.html && \
-    sed -i 's/pageViewCharts.js/pageViewCharts.min.js/g' public/monitor/*.html && \
-    sed -i 's/downloadsCharts.js/downloadsCharts.min.js/g' public/monitor/*.html && \
-    sed -i 's/eventCharts.js/eventCharts.min.js/g' public/monitor/*.html && \
-    sed -i 's/dataProcessor.js/dataProcessor.min.js/g' public/monitor/*.html && \
-    sed -i 's/ui.js/ui.min.js/g' public/monitor/*.html && \
-    sed -i 's/main.js/main.min.js/g' public/monitor/*.html && \
-    sed -i 's/control.js/control.min.js/g' public/monitor/*.html
+# 使用单条正则表达式替换所有CSS和JS文件引用为.min版本（排除chart.js、webfonts目录下的文件和fontawesome.css）
+RUN sed -i -E '/(chart\.js|webfonts\/|fontawesome\.css)/! { s/(href|src)="([^"]+)\.(css|js)"/\1="\2.min.\3"/g }' public/monitor/*.html
 
 # 第二阶段：运行阶段
 FROM python:3.11-alpine

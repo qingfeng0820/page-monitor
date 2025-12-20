@@ -41,7 +41,7 @@ function setupLogout() {
 
             try {
                 // 发送登出请求 (后端已改为GET请求)
-                const response = await fetch('/logout', {
+                const response = await fetch('logout', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -51,7 +51,7 @@ function setupLogout() {
                 if (response.ok) {
                     localStorage.removeItem('username');
                     // 登出成功，重定向到登录页面
-                    window.location.href = '/login.html';
+                    window.location.href = 'login.html';
                 } else {
                     console.error('登出失败');
                 }

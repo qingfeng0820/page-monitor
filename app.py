@@ -586,7 +586,7 @@ class ProtectedStaticFiles(StaticFiles):
                        and not path.endswith('/register.html') if path else False
 
         if is_html_file:
-            redirect_url = f"/login.html?url={quote(str(request.url))}"
+            redirect_url = f"login.html?url={quote(str(request.url))}"
             try:
                 current_user = await get_current_user(request)
                 if not current_user:
@@ -606,7 +606,7 @@ app.include_router(api_router)
 # 配置静态文件服务（放在API路由定义之后）
 app.mount("/public", StaticFiles(directory="public"), name="public")
 app.mount("/webfonts", StaticFiles(directory="public/monitor/webfonts"), name="webfonts")
-app.mount("/", ProtectedStaticFiles(directory="public/monitor", html=True), name="root")
+app.mount("/", StaticFiles(directory="public/monitor", html=True), name="root")
 
 if __name__ == "__main__":
     import uvicorn

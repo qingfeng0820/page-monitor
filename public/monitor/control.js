@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         messageDiv.style.display = 'none';
 
         try {
-            const response = await fetch('/sites', {
+            const response = await fetch('sites', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -75,7 +75,7 @@ async function fetchSystems() {
     const messageDiv = document.getElementById('message');
     
     try {
-        const response = await fetch('/sites');
+        const response = await fetch('sites');
         
         if (response.ok) {
             const systems = await response.json();
@@ -95,7 +95,7 @@ async function fetchSystems() {
                 container.innerHTML = systems.map(system => `
                     <div class="system-card" data-system-name="${system.site_name}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <h2><i class="fas fa-globe"></i> ${system.site_name}</h2>
+                            <h2 style="cursor: pointer; color: var(--primary-color);" onclick="selectSystem('${system.site_name}');"><i class="fas fa-globe"></i> ${system.site_name}</h2>
                             ${username === system.creator ? `<button class="delete-btn" onclick="deleteSystem('${system.site_name}');" title="删除系统">
                                 <i class="fas fa-trash"></i>
                             </button>` : ''}
@@ -117,7 +117,7 @@ async function fetchSystems() {
                             </div>
                             <!-- HTML代码 -->
                             <div id="tab-html-${system.site_name}" class="tab-content active">
-                                <pre><code id="code-html-${system.site_name}">&lt;script src="${window.location.origin}/public/pagemonitor.min.js" data-system="${system.site_name}" data-api-key="${system.api_key}"&gt;&lt;/script&gt;</code></pre>
+                                <pre><code id="code-html-${system.site_name}">&lt;script src="${window.location.origin}${window.location.pathname.replace('control.html', '')}public/pagemonitor.min.js" data-system="${system.site_name}" data-api-key="${system.api_key}"&gt;&lt;/script&gt;</code></pre>
                             </div>
                             <!-- Vue代码 -->
                             <div id="tab-vue-${system.site_name}" class="tab-content">
@@ -150,7 +150,7 @@ declare global {
 onMounted(() => {
   // 动态加载并初始化 pagemonitor.js
   const script = document.createElement('script');
-  script.src = '${window.location.origin}/public/pagemonitor.min.js';
+  script.src = '${window.location.origin}${window.location.pathname.replace('control.html', '')}public/pagemonitor.min.js';
   script.onload = () => {
     // 确保通过window对象访问PageMonitor类
     if (typeof window.PageMonitor !== 'undefined') {
@@ -218,7 +218,7 @@ function App() {
   useEffect(() => {
     // 动态加载并初始化 pagemonitor.js
     const script = document.createElement('script');
-    script.src = '${window.location.origin}/public/pagemonitor.min.js';
+    script.src = '${window.location.origin}${window.location.pathname.replace('control.html', '')}public/pagemonitor.min.js';
     script.onload = () => {
       // 确保通过window对象访问PageMonitor类
       if (typeof window.PageMonitor !== 'undefined') {
@@ -350,7 +350,7 @@ export default App;</code></pre>
             }
         } else if (response.status === 401) {
             // 未登录，跳转到登录页面
-            window.location.href = '/login.html';
+            window.location.href = 'login.html';
         } else {
             messageDiv.textContent = '获取系统列表失败';
             messageDiv.className = 'error-message';
@@ -369,7 +369,7 @@ function selectSystem(siteName) {
     localStorage.setItem('selectedSiteName', siteName);
     
     // 跳转到监控页面
-    window.location.href = '/';
+    window.location.href = './';
 }
 
 // 删除监控系统
@@ -387,7 +387,7 @@ function deleteSystem(siteName) {
     
     // 执行删除操作
     Promise.resolve()
-        .then(() => fetch(`/sites/${siteName}`, {
+        .then(() => fetch(`sites/${siteName}`, {
             method: 'DELETE',
             credentials: 'include'  // 包含cookie以便认证
         }))
@@ -452,7 +452,7 @@ function initPasswordModal() {
         messageDiv.style.display = 'none';
         
         try {
-            const response = await fetch('/user/change-password', {
+            const response = await fetch('user/change-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -515,7 +515,7 @@ async function logout() {
     
     try {
         // 发送登出请求 (后端已改为GET请求)
-        const response = await fetch('/logout', {
+        const response = await fetch('logout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -526,16 +526,16 @@ async function logout() {
         if (response.ok) {
             localStorage.removeItem('username');
             // 登出成功，重定向到登录页面
-            window.location.href = '/login.html';
+            window.location.href = 'login.html';
         } else {
             console.error('登出失败');
             // 即使失败也跳转到登录页面
-            window.location.href = '/login.html';
+            window.location.href = 'login.html';
         }
     } catch (error) {
         console.error('登出错误:', error);
         // 发生错误时跳转到登录页面
-        window.location.href = '/login.html';
+        window.location.href = 'login.html';
     }
 }
 
@@ -545,7 +545,7 @@ async function logout() {
 // 加载网站的授权用户列表
 async function loadAuthorizedUsers(siteName) {
     try {
-        const response = await fetch(`/sites/${siteName}/users`, {
+        const response = await fetch(`sites/${siteName}/users`, {
             credentials: 'include'  // 包含cookie以便认证
         });
         
@@ -618,7 +618,7 @@ async function addAuthorizedUser(siteName) {
     }
     
     try {
-        const response = await fetch(`/sites/${siteName}/users`, {
+        const response = await fetch(`sites/${siteName}/users`, {
             method: 'POST',
             credentials: 'include',  // 包含cookie以便认证
             headers: {
@@ -653,7 +653,7 @@ async function removeAuthorizedUser(siteName, username) {
     }
     
     try {
-        const response = await fetch(`/sites/${siteName}/users/${username}`, {
+        const response = await fetch(`sites/${siteName}/users/${username}`, {
             method: 'DELETE',
             credentials: 'include'  // 包含cookie以便认证
         });

@@ -28,7 +28,7 @@ class PageMonitor {
                 let detectedApiBaseUrl = '/api';
                 try {
                     // 方法1: 首先尝试查找包含pagemonitor关键词的脚本标签
-                    const scriptTags = document.querySelectorAll('script[src*="pagemonitor"], script[src*="page-monitor"]');
+                    const scriptTags = document.querySelectorAll('script[src*="pagemonitor"]');
                     
                     // 如果找到匹配的脚本标签
                     if (scriptTags.length > 0) {
@@ -37,10 +37,19 @@ class PageMonitor {
                                 // 检查script.src是否存在且不为空
                                 if (script.src) {
                                     const scriptUrl = new URL(script.src);
-                                    // 接受任何有效的协议（http, https, file等）
-                                    detectedApiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}/api`;
-                                    this.log_debug(`Detected apiBaseUrl from script tag: ${detectedApiBaseUrl}`);
-                                    break;
+                                    // 只接受http://或https://协议
+                                    if (scriptUrl.protocol === 'http:' || scriptUrl.protocol === 'https:') {
+                                        // 检查URL是否以public/pagemonitor.js或public/pagemonitor.min.js结尾
+                                        const pathname = scriptUrl.pathname;
+                                        if (pathname.endsWith('public/pagemonitor.js') || pathname.endsWith('public/pagemonitor.min.js')) {
+                                            // 提取context path（public之前的部分）
+                                            const publicIndex = pathname.lastIndexOf('public/');
+                                            const contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                                            detectedApiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}${contextPath}/api`;
+                                            this.log_debug(`Detected apiBaseUrl from script tag: ${detectedApiBaseUrl}`);
+                                            break;
+                                        }
+                                    }
                                 }
                             } catch (e) {
                                 this.log_debug('Error parsing script URL (method 1):', e);
@@ -1527,9 +1536,12 @@ class PageMonitor {
                 if (params.has('apiBaseUrl')) {
                     config.apiBaseUrl = params.get('apiBaseUrl');
                 } else if (scriptUrl.protocol === 'http:' || scriptUrl.protocol === 'https:') {
-                    // 默认使用脚本所在服务器的地址
-                    const scriptUrl = new URL(targetScript.src);
-                    config.apiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}/api`;
+                    // 默认使用脚本所在服务器的地址，并考虑context path
+                    const pathname = scriptUrl.pathname;
+                    // 提取context path（public之前的部分）
+                    const publicIndex = pathname.lastIndexOf('public/');
+                    const contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                    config.apiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}${contextPath}/api`;
                 }
                 // 添加对system和apiKey的支持
                 if (params.has('system')) config.system = params.get('system');
