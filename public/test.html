@@ -41,12 +41,14 @@
         }
     </style>
 
-     <!-- <script src="http://192.168.6.34:8000/public/pagemonitor.min.js" data-system="mytest" data-api-key="82a46969655d946a47cc72858a7d59c3fbeb642fa6db10fa2c5902c8ea3d285b" data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script> -->
-	<!--<script src="http://localhost:8000/public/pagemonitor.js" data-system="mytest" data-api-key="7dad2b354f3ff2d1b1aba26e4d6368da0bbff1137b819033cd171726a5149b46"
-    data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script>-->
+    <!-- <script src="http://192.168.6.6:8000/public/pagemonitor.js" data-system="test2" data-api-key="df8b9957ace64ec7cf4532771161ab2b524f2fdc4fe702395c883061d6819728" 
+    data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script> -->
 
-    <script src="http://192.168.6.6:8000/public/pagemonitor.js" data-system="test2" data-api-key="238b1b3ec7e7f9a2de0cf60ba0ded44b2577099ce093c3cb6ff5bd2554a899ef"></script>
-
+    <!-- <script src="http://192.168.6.34:10017/monitor/public/pagemonitor.js" data-system="test2" data-api-key="a553cf12159fb22f38ae07f47be6aafbcb240e22f5537cf129415922756ed14a"
+    data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script> -->
+	
+    <script src="http://localhost:8000/public/pagemonitor.js" data-system="mytest" data-api-key="7dad2b354f3ff2d1b1aba26e4d6368da0bbff1137b819033cd171726a5149b46"
+    data-log-level="debug" data-custom-events='["button.custom-event-btn", {"selector": ".product-item", "eventType": "click", "properties": {"category": "product", "action": "view"}}]'></script>
 </head>
 <body>
     <h1>PageMonitor 测试页面</h1>
@@ -91,6 +93,25 @@
         </div>
     </div>
 
+    <div class="section">
+        <h2>对话框测试</h2>
+        <p>点击以下按钮打开对话框，测试确认按钮的下载跟踪：</p>
+        <button onclick="openDialog()">打开下载对话框</button>
+        
+        <!-- 简单的对话框实现 -->
+        <div id="download-dialog" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000;">
+            <h3>确认下载</h3>
+            <p>您确定要下载这份文档吗？</p>
+            <div style="text-align: right; margin-top: 20px;">
+                <button onclick="closeDialog()" style="margin-right: 10px; background: #ccc; color: black;">取消</button>
+                <button onclick="confirmDownload()" style="background: #007cba; color: white;">确认下载</button>
+            </div>
+        </div>
+        
+        <!-- 背景遮罩 -->
+        <div id="dialog-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999;"></div>
+    </div>
+
     <script>
 
         let pageMonitor;
@@ -130,6 +151,23 @@
             localStorage.removeItem('pending_tracking_event');
             alert('待发送数据已清除！');
             showStatus();
+        }
+        
+        // 对话框相关函数
+        function openDialog() {
+            document.getElementById('download-dialog').style.display = 'block';
+            document.getElementById('dialog-overlay').style.display = 'block';
+        }
+        
+        function closeDialog() {
+            document.getElementById('download-dialog').style.display = 'none';
+            document.getElementById('dialog-overlay').style.display = 'none';
+        }
+        
+        function confirmDownload() {
+            // 模拟下载操作
+            window.location.href = '/api/test-dialog.pdf';
+            closeDialog();
         }
     </script>
 </body>

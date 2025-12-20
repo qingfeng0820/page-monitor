@@ -41,7 +41,7 @@ function setupLogout() {
 
             try {
                 // 发送登出请求 (后端已改为GET请求)
-                const response = await fetch('logout', {
+                const response = await apiFetch('logout', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

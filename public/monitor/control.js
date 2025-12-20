@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         messageDiv.style.display = 'none';
 
         try {
-            const response = await fetch('sites', {
+            const response = await apiFetch('sites', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -75,7 +75,7 @@ async function fetchSystems() {
     const messageDiv = document.getElementById('message');
     
     try {
-        const response = await fetch('sites');
+        const response = await apiFetch('sites');
         
         if (response.ok) {
             const systems = await response.json();
@@ -387,7 +387,7 @@ function deleteSystem(siteName) {
     
     // 执行删除操作
     Promise.resolve()
-        .then(() => fetch(`sites/${siteName}`, {
+        .then(() => apiFetch(`sites/${siteName}`, {
             method: 'DELETE',
             credentials: 'include'  // 包含cookie以便认证
         }))
@@ -452,7 +452,7 @@ function initPasswordModal() {
         messageDiv.style.display = 'none';
         
         try {
-            const response = await fetch('user/change-password', {
+            const response = await apiFetch('user/change-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -515,7 +515,7 @@ async function logout() {
     
     try {
         // 发送登出请求 (后端已改为GET请求)
-        const response = await fetch('logout', {
+        const response = await apiFetch('logout', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -545,7 +545,7 @@ async function logout() {
 // 加载网站的授权用户列表
 async function loadAuthorizedUsers(siteName) {
     try {
-        const response = await fetch(`sites/${siteName}/users`, {
+        const response = await apiFetch(`sites/${siteName}/users`, {
             credentials: 'include'  // 包含cookie以便认证
         });
         
@@ -618,7 +618,7 @@ async function addAuthorizedUser(siteName) {
     }
     
     try {
-        const response = await fetch(`sites/${siteName}/users`, {
+        const response = await apiFetch(`sites/${siteName}/users`, {
             method: 'POST',
             credentials: 'include',  // 包含cookie以便认证
             headers: {
@@ -653,7 +653,7 @@ async function removeAuthorizedUser(siteName, username) {
     }
     
     try {
-        const response = await fetch(`sites/${siteName}/users/${username}`, {
+        const response = await apiFetch(`sites/${siteName}/users/${username}`, {
             method: 'DELETE',
             credentials: 'include'  // 包含cookie以便认证
         });

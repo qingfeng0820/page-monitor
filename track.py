@@ -76,6 +76,9 @@ async def check_site_api_key(request: Request, data: dict):
     # 如果registered_url为空，返回500错误
     if not registered_url:
         raise HTTPException(status_code=500, detail="找不到registered_url")
+
+    if registered_url.endswith('/'):
+        registered_url = registered_url[:-1]
     
     # 只从Origin头获取请求的origin
     request_origin = request.headers.get("Origin")
@@ -87,20 +90,23 @@ async def check_site_api_key(request: Request, data: dict):
         
         # 解析注册的URL的origin
         try:
-            registered_parsed = urlparse(registered_url)
-            registered_origin = f"{registered_parsed.scheme}://{registered_parsed.netloc}"
-            
-            # 比对请求origin与注册URL的origin是否匹配
-            if request_origin == registered_origin:
+            # registered_parsed = urlparse(registered_url)
+            # registered_origin = f"{registered_parsed.scheme}://{registered_parsed.netloc}"
+            #
+            # # 比对请求origin与注册URL的origin是否匹配
+            # if request_origin == registered_origin:
+            #     return True
+            if url.startswith(registered_url):
                 return True
+            raise HTTPException(status_code=403, detail="URL does not match registered site URL")
         except:
             # 如果URL解析失败，继续检查完全匹配
             pass
     
     # 如果以上验证都失败，尝试完全匹配
-    if url != registered_origin:
+    if url != registered_url:
         raise HTTPException(status_code=403, detail="URL does not match registered site URL")
-    
+
     return True
 
 

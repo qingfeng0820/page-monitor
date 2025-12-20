@@ -36,10 +36,10 @@
   sudo docker build -t simple-track .
 
   # 导出image
-  docker save simple-track > simple-track.tar.gz
+  sudo docker save simple-track > simple-track.tar.gz
 
   # 在目标机器上导入
-  docker load -i simple-track.tar.gz
+  sudo docker load -i simple-track.tar.gz
   ```
 2. 运行PageMonitor容器
   ```shell

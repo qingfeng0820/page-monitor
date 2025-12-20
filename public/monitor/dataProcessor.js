@@ -90,7 +90,7 @@ async function loadData() {
             systemParam = localStorage.getItem('selectedSiteName');
         }
         try {
-            const response = await fetch('sites');
+            const response = await apiFetch('sites');
             if (response.ok) {
                 const systems = await response.json();
                 const systemNames = systems.map(s => s.site_name);
@@ -114,14 +114,11 @@ async function loadData() {
                     }
                 }
             } else {
-                // API请求失败，跳转到control.html
-                window.location.href = 'control.html';
+                console.error('获取系统列表失败:', response.status);
                 return;
             }
         } catch (error) {
             console.error('获取系统列表失败:', error);
-            // 请求出错，跳转到control.html
-            window.location.href = 'control.html';
             return;
         }
 
@@ -144,10 +141,10 @@ async function loadData() {
 
         // 并行获取页面访问、下载、事件和停留时长数据
         const [pageviewResponse, downloadResponse, eventResponse, durationResponse] = await Promise.all([
-            fetch(pageviewUrl),
-            fetch(downloadUrl),
-            fetch(eventUrl),
-            fetch(durationUrl)
+            apiFetch(pageviewUrl),
+            apiFetch(downloadUrl),
+            apiFetch(eventUrl),
+            apiFetch(durationUrl)
         ]);
         
         // 检查响应状态

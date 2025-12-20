@@ -44,7 +44,13 @@ class PageMonitor {
                                         if (pathname.endsWith('public/pagemonitor.js') || pathname.endsWith('public/pagemonitor.min.js')) {
                                             // 提取context path（public之前的部分）
                                             const publicIndex = pathname.lastIndexOf('public/');
-                                            const contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                                            let contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                                            
+                                            // 确保contextPath和/api之间只有一个斜杠
+                                            if (contextPath && contextPath.endsWith('/')) {
+                                                contextPath = contextPath.slice(0, -1);
+                                            }
+                                            
                                             detectedApiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}${contextPath}/api`;
                                             this.log_debug(`Detected apiBaseUrl from script tag: ${detectedApiBaseUrl}`);
                                             break;
@@ -326,12 +332,13 @@ class PageMonitor {
     detectOS(ua) {
         try {
             if (typeof ua !== 'string') return 'Unknown';
-            
+
+            if (ua.includes('Android')) return 'Android';
+            if (ua.includes('iOS') || ua.includes('iPhone') || ua.includes('iPad')) return 'iOS';
             if (ua.includes('Windows')) return 'Windows';
             if (ua.includes('Mac')) return 'MacOS';
             if (ua.includes('Linux')) return 'Linux';
-            if (ua.includes('Android')) return 'Android';
-            if (ua.includes('iOS') || ua.includes('iPhone') || ua.includes('iPad')) return 'iOS';
+
             return 'Unknown';
         } catch (error) {
             this.log_error('检测操作系统失败:', error);
@@ -519,29 +526,23 @@ class PageMonitor {
                 components.push('webgl_error');
             }
             
-            // 音频上下文指纹 (基础实现) - 使用try-catch隔离
+            // 音频上下文指纹 - 跳过，因为现代浏览器要求用户交互才能创建AudioContext
+            // 由于安全策略限制，我们不再尝试获取音频指纹，以避免控制台错误
+            components.push('audio_skip_modern_browser');
+            
+            /*
+            // 旧的音频指纹实现已被禁用，因为会触发浏览器安全策略警告
             try {
                 if (window.AudioContext || window.webkitAudioContext) {
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    try {
-                        components.push(audioContext.sampleRate?.toString() || 'unknown_rate');
-                        components.push(audioContext.destination?.maxChannelCount?.toString() || 'unknown_channels');
-                        
-                        // 清理资源
-                        if (audioContext.close) {
-                            audioContext.close().catch(() => {});
-                        }
-                    } catch (audioError) {
-                        components.push('audio_param_error');
-                        // 清理资源
-                        if (audioContext.close) {
-                            audioContext.close().catch(() => {});
-                        }
-                    }
+                    // 只有在用户交互后才能创建AudioContext
+                    // 由于这是自动初始化的监控脚本，我们无法满足此要求
+                    // 因此直接跳过音频指纹采集
+                    components.push('audio_requires_user_interaction');
                 }
             } catch (e) {
                 components.push('audio_error');
             }
+            */
             
             // 字体检测 (基础实现) - 使用try-catch隔离且设置超时
             try {
@@ -684,54 +685,140 @@ class PageMonitor {
     trackDownloadLinks() {
         if (!document || !document.addEventListener) return;
         
+        // Helper method to check if a URL is a download URL
+        const isDownloadUrl = (url) => {
+            if (!url) return false;
+            const urlLower = url.toLowerCase();
+            return /\.(pdf|zip|exe|tar\.gz|tar|gz|rar|7z|dmg|pkg|deb|rpm|apk|jar|war|msi|bin|sh|doc|docx|xls|xlsx|ppt|pptx|txt|csv|mp4|mp3|avi|mov|wmv|flv|wav|png|jpg|jpeg|gif|bmp|psd|ai|eps|sketch|fig|xd|iso|img|dll|sys|drv|ocx|cab|zipx)$/i.test(urlLower) ||
+                   urlLower.includes('/download/') ||
+                   urlLower.includes('/downloads/');
+        };
+        
+        // Helper method to extract URL from button's onclick attribute
+        const extractUrlFromOnclick = (onclick) => {
+            if (!onclick) return null;
+            const onclickStr = onclick.toString();
+            // Match window.open('url') or window.location.href = 'url'
+            const openMatch = onclickStr.match(/window\.open\(['"]([^'"]+)['"]/i);
+            const locationMatch = onclickStr.match(/window\.location\.href\s*=\s*['"]([^'"]+)['"]/i);
+            const locationAssignMatch = onclickStr.match(/window\.location\.assign\(['"]([^'"]+)['"]/i);
+            
+            return openMatch?.[1] || locationMatch?.[1] || locationAssignMatch?.[1] || null;
+        };
+        
         const downloadLinkListener = (e) => {
             try {
+                let originalHref = null;
+                let element = null;
+                let fileName = null;
+                let linkText = '';
+                let isDownload = false;
+                
+                // Check for anchor links first
                 const link = e.target ? e.target.closest('a') : null;
                 if (link && link.href) {
-                    try {
-                        const href = link.href.toLowerCase();
-                        const isDownload = link.hasAttribute('download') || 
-                              /\.(pdf|zip|exe|tar\.gz|tar|gz|rar|7z|dmg|pkg|deb|rpm|apk|jar|war|msi|bin|sh|doc|docx|xls|xlsx|ppt|pptx|txt|csv|mp4|mp3|avi|mov|wmv|flv|wav|png|jpg|jpeg|gif|bmp|psd|ai|eps|sketch|fig|xd|iso|img|dll|sys|drv|ocx|cab|zipx)$/i.test(href) ||
-                              href.includes('/download/') ||
-                              href.includes('/downloads/') ||
-                              (link.textContent && link.textContent.toLowerCase().includes('download')) ||
-                              (link.getAttribute('class') && link.getAttribute('class')?.toLowerCase().includes('download'));
-                         // 只有当链接是下载链接时才进行跟踪和处理
-                    if (isDownload) {
-                        // 保存原始链接，确保即使跟踪失败也能下载
-                        const originalHref = link.href;
-                         
-                        // 获取技术信息
-                        const techInfo = this.getTechnologyInfo();
-                         
-                        // 如果技术信息有效，进行跟踪
-                        if (techInfo) {
-                            // 阻止默认行为
-                            e.preventDefault();
-                             
-                            try {
-                                const downloadInfo = {
-                                    ...techInfo,
-                                    downloadUrl: originalHref,
-                                    fileName: link.download || this.getFileNameFromUrl(originalHref),
-                                    linkText: link.textContent ? link.textContent.trim() : '',
-                                    sourcePage: this.currentUrl // 记录下载来源页面
-                                };
-                                 
-                                this.log_debug(`Tracking download: ${downloadInfo.fileName} from ${downloadInfo.sourcePage}`);
-                                 
-                                // 发送跟踪请求（使用setTimeout确保不会阻塞UI）
-                                setTimeout(() => {
-                                    this.sendToServer('/track/download', "download", downloadInfo).then(success => {
-                                        if (success) {
-                                            // 跟踪成功后实际下载
-                                            this.log_debug(`Download tracking successful, proceeding with download: ${originalHref}`);
-                                        } else {
-                                            // 即使跟踪失败也允许下载，但记录警告
-                                            this.log_warn('Download tracking failed, but allowing download to proceed');
+                    originalHref = link.href;
+                    element = link;
+                    linkText = link.textContent ? link.textContent.trim() : '';
+                    fileName = link.download || this.getFileNameFromUrl(originalHref);
+                    
+                    const hrefLower = originalHref.toLowerCase();
+                    isDownload = link.hasAttribute('download') || 
+                                isDownloadUrl(originalHref) ||
+                                (linkText.toLowerCase().includes('download')) ||
+                                (link.getAttribute('class') && link.getAttribute('class')?.toLowerCase().includes('download'));
+                }
+                // Check for buttons
+                else {
+                    const button = e.target ? e.target.closest('button, input[type="button"], input[type="submit"]') : null;
+                    if (button) {
+                        const isDataDownloadButton = button.hasAttribute('data-is-download') && 
+                                                   button.getAttribute('data-is-download') !== 'false';
+                        if (isDataDownloadButton) {
+                            linkText = button.textContent ? button.textContent.trim() : 
+                                    button.getAttribute('value') || '';
+                            
+                            // Try to extract URL from data attributes
+                            originalHref = button.getAttribute('data-download-url') ||
+                                        button.getAttribute('data-href') ||
+                                        button.getAttribute('href') ||
+                                        button.getAttribute('data-url');
+                            
+                            // Try to extract URL from onclick attribute if no data attributes
+                            if (!originalHref) {
+                                originalHref = extractUrlFromOnclick(button.getAttribute('onclick'));
+                                
+                                // If still no URL, try to extract any URL patterns from onclick
+                                if (!originalHref) {
+                                    const onclickAttr = button.getAttribute('onclick');
+                                    if (onclickAttr) {
+                                        const urlPattern = /https?:\/\/[^\s'"]+|\/[^\s'"]+/g;
+                                        const matches = onclickAttr.match(urlPattern);
+                                        if (matches && matches.length > 0) {
+                                            originalHref = matches[0];
                                         }
-                                         
-                                        // 无论跟踪成功与否，都执行下载
+                                    }
+                                }
+                            }
+                            
+                            // Check if URL is a download URL
+                            const hasDownloadUrl = originalHref && isDownloadUrl(originalHref);
+                            
+                            if (isDataDownloadButton || hasDownloadUrl) {
+                                element = button;
+                                isDownload = true;
+                                
+                                // Set fileName based on available information, with fallbacks
+                                fileName = button.getAttribute('data-filename') || 
+                                        (originalHref ? this.getFileNameFromUrl(originalHref) : linkText) ||
+                                        button.getAttribute('data-download-name') ||
+                                        'download_from_button';
+                            }
+                        }
+                    }
+                }
+                
+                // 只有当元素是下载元素时才进行跟踪和处理
+                // 对于按钮，即使没有直接URL但明显是下载按钮也应该跟踪
+                if (element && isDownload) {
+                    // 获取技术信息
+                    const techInfo = this.getTechnologyInfo();
+                        
+                    // 如果技术信息有效，进行跟踪
+                    if (techInfo) {
+                        try {
+                            const downloadInfo = {
+                                ...techInfo,
+                                downloadUrl: originalHref,
+                                fileName: fileName,
+                                linkText: linkText,
+                                sourcePage: this.currentUrl, // 记录下载来源页面
+                                elementType: element.tagName.toLowerCase(), // 记录是链接还是按钮
+                            };
+                               
+                            this.log_debug(`Tracking download: ${downloadInfo.fileName} from ${downloadInfo.sourcePage}`);
+                               
+                            // 只有当我们能够从按钮中提取到URL时，才阻止默认行为并手动触发下载
+                            const hasValidUrl = originalHref && (typeof originalHref === 'string') && originalHref.length > 0;
+                            
+                            if (hasValidUrl) {
+                                // 阻止默认行为
+                                e.preventDefault();
+                            }
+                               
+                            // 发送跟踪请求（使用setTimeout确保不会阻塞UI）
+                            setTimeout(() => {
+                                this.sendToServer('/track/download', "download", downloadInfo).then(success => {
+                                    if (success) {
+                                        // 跟踪成功后实际下载
+                                        this.log_debug(`Download tracking successful, proceeding with download: ${originalHref}`);
+                                    } else {
+                                        // 即使跟踪失败也允许下载，但记录警告
+                                        this.log_warn('Download tracking failed, but allowing download to proceed');
+                                    }
+                                       
+                                    // 只有当我们有URL时才手动执行下载
+                                    if (hasValidUrl) {
                                         try {
                                             // 使用window.open确保在所有浏览器中都能正常下载
                                             const downloadWindow = window.open(originalHref, '_self');
@@ -746,48 +833,48 @@ class PageMonitor {
                                                 const tempLink = document.createElement('a');
                                                 tempLink.href = originalHref;
                                                 tempLink.target = '_self';
-                                                if (link.hasAttribute('download')) {
-                                                    tempLink.download = link.download;
+                                                if (element.hasAttribute('download')) {
+                                                    tempLink.download = element.getAttribute('download');
                                                 }
                                                 tempLink.style.display = 'none';
                                                 document.body.appendChild(tempLink);
                                                 tempLink.click();
                                                 document.body.removeChild(tempLink);
                                             } catch (finalError) {
-                                                    this.log_error('Final download fallback error:', finalError);
+                                                this.log_error('Final download fallback error:', finalError);
                                             }
                                         }
-                                    }).catch(trackingError => {
-                                        this.log_error('Download tracking promise error:', trackingError);
-                                        // Promise出错时也确保下载
+                                    }
+                                }).catch(trackingError => {
+                                    this.log_error('Download tracking promise error:', trackingError);
+                                    // Promise出错时，如果有URL则尝试下载
+                                    if (hasValidUrl) {
                                         try {
                                             window.location.href = originalHref;
                                         } catch (fallbackError) {
                                             this.log_error('Fallback download error:', fallbackError);
                                         }
-                                    });
-                                }, 0);
-                            } catch (infoError) {
-                                this.log_error('Download info generation error:', infoError);
-                                // 生成信息失败时直接下载
+                                    }
+                                });
+                            }, 0);
+                        } catch (infoError) {
+                            this.log_error('Download info generation error:', infoError);
+                            // 生成信息失败时，如果有URL则直接下载
+                            if (originalHref) {
                                 window.location.href = originalHref;
                             }
-                        } else {
-                            // 如果技术信息无效，记录警告但不阻止下载
-                            this.log_warn('Skipping download tracking: No valid technology information available');
-                            // 不阻止默认行为，直接执行下载
                         }
-                        }
-                    } catch (linkError) {
-                        this.log_error('Download link processing error:', linkError);
-                        // 不阻止默认行为，让浏览器正常处理
+                    } else {
+                        // 如果技术信息无效，记录警告但不阻止下载
+                        this.log_warn('Skipping download tracking: No valid technology information available');
+                        // 不阻止默认行为，直接执行下载
                     }
                 }
             } catch (clickError) {
                 this.log_error('Download click handler error:', clickError);
                 // 捕获所有错误，确保不会影响页面其他功能
             }
-    };
+        };
     
     // 添加事件监听器
     document.addEventListener('click', downloadLinkListener);
@@ -840,8 +927,21 @@ class PageMonitor {
 //                this.log_warn('Data contains "unknown" values, skipping sendToServer');
 //                return false;
 //            }
-            // 安全构建URL
-            const url = `${this.apiBaseUrl}${endpoint}`;
+            // 安全构建URL，确保apiBaseUrl末尾和endpoint开头只有一个斜杠
+            let apiBaseUrl = this.apiBaseUrl;
+            let endpointPath = endpoint;
+            
+            // 移除apiBaseUrl末尾的斜杠
+            if (apiBaseUrl.endsWith('/')) {
+                apiBaseUrl = apiBaseUrl.slice(0, -1);
+            }
+            
+            // 确保endpointPath以斜杠开头
+            if (!endpointPath.startsWith('/')) {
+                endpointPath = `/${endpointPath}`;
+            }
+            
+            const url = `${apiBaseUrl}${endpointPath}`;
             return this.doSend(url, type, data);
         } catch (error) {
             // 捕获所有错误，包括网络错误和超时
@@ -1540,7 +1640,13 @@ class PageMonitor {
                     const pathname = scriptUrl.pathname;
                     // 提取context path（public之前的部分）
                     const publicIndex = pathname.lastIndexOf('public/');
-                    const contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                    let contextPath = publicIndex > 0 ? pathname.substring(0, publicIndex) : '';
+                    
+                    // 确保contextPath和/api之间只有一个斜杠
+                    if (contextPath && contextPath.endsWith('/')) {
+                        contextPath = contextPath.slice(0, -1);
+                    }
+                    
                     config.apiBaseUrl = `${scriptUrl.protocol}//${scriptUrl.host}${contextPath}/api`;
                 }
                 // 添加对system和apiKey的支持
