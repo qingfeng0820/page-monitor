@@ -1,10 +1,7 @@
-from urllib.parse import urlparse
-
-from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Depends
+from fastapi import HTTPException, Request, APIRouter
 
 from datetime import datetime
 from typing import Optional, Dict, Any
-import re
 import hashlib
 import logging
 
@@ -12,18 +9,70 @@ from mongodb import stats_collection, sites_collection
 from util import lru_cache_with_ttl, access_system
 
 logger = logging.getLogger(__name__)
-SANITIZE_PATTERN = re.compile(r'[.$]')
 
 # 创建API路由
 api_router = APIRouter(prefix="/api")
 
 
 def sanitize_key(key: str) -> str:
-    """清理key中的特殊字符"""
+    """清理key中的特殊字符 - 存储时使用"""
     if not key:
         return "unknown"
-    # 替换MongoDB保留字符
-    return SANITIZE_PATTERN.sub('_', str(key))
+    
+    # 替换MongoDB保留字符和可能引起问题的字符
+    safe = str(key)
+    
+    # 替换点号（URL和IP中的点）
+    safe = safe.replace('.', '_dot_')
+    
+    # 替换美元符号（MongoDB保留字符）
+    safe = safe.replace('$', '_dollar_')
+    
+    # 替换其他可能的问题字符
+    safe = safe.replace('\x00', '_null_')  # null字符
+    
+    return safe
+
+
+def restore_all_keys_recursive(data):
+    """
+    递归遍历并还原数据结构中的所有键
+    支持字典、列表、元组和基本类型
+    """
+    if isinstance(data, dict):
+        # 处理字典：还原每个键，并递归处理值
+        restored_dict = {}
+        for key, value in data.items():
+            # 还原键名
+            restored_key = restore_key(key)
+            # 递归处理值
+            restored_dict[restored_key] = restore_all_keys_recursive(value)
+        return restored_dict
+
+    elif isinstance(data, list):
+        # 处理列表：递归处理每个元素
+        return [restore_all_keys_recursive(item) for item in data]
+
+    elif isinstance(data, tuple):
+        # 处理元组：递归处理每个元素，返回元组
+        return tuple(restore_all_keys_recursive(item) for item in data)
+
+    elif isinstance(data, set):
+        # 处理集合：递归处理每个元素，返回列表（因为集合可能包含不可哈希的字典）
+        return [restore_all_keys_recursive(item) for item in data]
+
+    else:
+        # 基本类型：直接返回
+        return data
+
+
+def restore_key(safe_key: str) -> str:
+    """还原key中的特殊字符 - 展示时使用（性能优化版）"""
+    if not safe_key or not isinstance(safe_key, str):
+        return safe_key if safe_key is not None else "unknown"
+
+    # 使用链式替换，性能更好
+    return safe_key.replace('_dot_', '.').replace('_dollar_', '$').replace('_null_', '')
 
 
 def sanitize_fingerprint(fingerprint: str) -> str:
@@ -128,7 +177,7 @@ async def _track_common(request: Request, data: dict, track_type: str, detail_ha
         # 获取客户端IP并用于统计分析
         client_ip = get_client_ip(request)
         # 获取IP前两段用于地域统计（保护隐私）
-        ip_prefix = '_'.join(client_ip.split('.')[:2]) if '.' in client_ip else 'unknown'
+        ip_prefix = sanitize_key('.'.join(client_ip.split('.')[:2])) if '.' in client_ip else 'unknown'
         # 获取当前日期（用于按天分片）
         current_date = datetime.utcnow().strftime('%Y-%m-%d')
         
@@ -607,6 +656,9 @@ async def _stats_common(request: Request, system: str, start_date: Optional[str]
         
         # 将趋势数据添加到聚合结果中
         aggregated_stats['trendData'] = trend_data
+
+        # ========== 统一还原所有键 ==========
+        aggregated_stats = restore_all_keys_recursive(aggregated_stats)
 
         # 返回处理后的结果
         return final_result_handler(aggregated_stats, limit)
