@@ -81,7 +81,7 @@ class PageMonitor {
             this.apiKey = options.apiKey;
             this.currentUrl = window.location ? window.location.href : '';
             this.pageTitle = document.title || '';
-            this.isSPA = options.isSPA || false;
+            this.isSpa = options.isSpa || false;
             this.isTrackDownloads = options.isTrackDownloads || true;
             this.maxPendingItems = options.maxPendingItems || 50; // 最大待处理记录数，默认50条
             this.customEvents = options.customEvents || []; // 自定义事件配置
@@ -171,7 +171,7 @@ class PageMonitor {
             }
             
             // 只在SPA模式下设置路由监听
-            if (this.isSPA && document && document.addEventListener) {
+            if (this.isSpa && document && document.addEventListener) {
                 try {
                     // 监听页面可见性变化（单页应用场景）
                     document.addEventListener('visibilitychange', () => {
@@ -1652,7 +1652,7 @@ class PageMonitor {
                 // 添加对system和apiKey的支持
                 if (params.has('system')) config.system = params.get('system');
                 if (params.has('apiKey')) config.apiKey = params.get('apiKey');
-                if (params.has('isSPA')) config.isSPA = params.get('isSPA') === 'true';
+                if (params.has('isSpa')) config.isSpa = params.get('isSpa') === 'true';
                 if (params.has('isTrackDownloads')) config.isTrackDownloads = params.get('isTrackDownloads') === 'true';
                 if (params.has('maxPendingItems')) {
                     try {

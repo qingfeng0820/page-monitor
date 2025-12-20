@@ -103,18 +103,19 @@ app = FastAPI(title="页面访问监控API", lifespan=lifespan)
 # 获取CORS允许的源列表
 allow_origins_env = os.getenv("ALLOW_ORIGINS")
 allow_origins = []
-if not allow_origins_env:
-    allow_origins_env = "*"
-logger.info("ALLOW_ORIGINS: %s", allow_origins_env)
-allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
-# 移除可能存在的空字符串
-allow_origins = [origin for origin in allow_origins if origin]
+allow_origin_regex = r'^https?://.*'
+if allow_origins_env:
+    allow_origins = [origin.strip() for origin in allow_origins_env.split(",")]
+    # 移除可能存在的空字符串
+    allow_origins = [origin for origin in allow_origins if origin]
+    allow_origin_regex = r"http://(localhost|127\.0\.0\.1):\d+"  # 允许本地开发环境
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",  # 允许本地开发环境
+    allow_origin_regex=allow_origin_regex,
     allow_origins=allow_origins,  # 允许配置的生产环境源
     allow_credentials=True,  # 允许发送凭证
+
     allow_methods=["GET", "POST", "OPTIONS"],  # 只允许必要的HTTP方法
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-API-Key"],  # 只允许必要的头
     max_age=86400,  # 预检请求的缓存时间（秒）
