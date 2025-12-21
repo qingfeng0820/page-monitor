@@ -95,9 +95,8 @@
     </div>
 
     <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
+        // 封装登录逻辑为独立函数
+        async function login() {
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const errorMessage = document.getElementById('errorMessage');
@@ -136,6 +135,19 @@
                 console.error('登录错误:', error);
                 errorMessage.textContent = '网络错误，请稍后重试';
                 errorMessage.style.display = 'block';
+            }
+        }
+        
+        // 表单提交事件监听器
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await login();
+        });
+        
+        // 密码框回车事件监听器
+        document.getElementById('password').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                await login();
             }
         });
     </script>
