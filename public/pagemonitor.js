@@ -85,6 +85,8 @@ class PageMonitor {
             this.isTrackDownloads = options.isTrackDownloads || true;
             this.maxPendingItems = options.maxPendingItems || 50; // 最大待处理记录数，默认50条
             this.customEvents = options.customEvents || []; // 自定义事件配置
+            // 指纹过期时间配置（天）
+            this.fingerprintExpiryDays = options.fingerprintExpiryDays || 30;
             // 页面停留时长相关属性
             this.activeTimeThreshold = options.activeTimeThreshold || 600000; // 10分钟无活动视为不活跃
             this.pageEntryTime = Date.now(); // 页面进入时间
@@ -187,10 +189,10 @@ class PageMonitor {
                                     this.currentUrl = window.location.href;
                                     this.pageTitle = document.title || '';
                                     this.log_debug(`PageMonitor detected URL change to: ${this.currentUrl}`);
+                                    this.trackPageView().catch(err => {
+                                        this.log_error('PageMonitor trackPageView (visibilitychange) error:', err);
+                                    });
                                 }
-                                this.trackPageView().catch(err => {
-                                    this.log_error('PageMonitor trackPageView (visibilitychange) error:', err);
-                                });
                             }
                         } catch (error) {
                             this.log_error('PageMonitor visibilitychange error:', error);
@@ -374,6 +376,40 @@ class PageMonitor {
     // 优化的用户指纹生成方法
     // 收集稳定、精确且能区分不同用户的客户端特征
     generateUserFingerprint() {
+        // 缓存相关常量 - 使用更唯一的键名避免与其他应用冲突
+        // 采用命名空间前缀 + 应用标识 + 功能标识的方式
+        const FINGERPRINT_CACHE_KEY = 'pageMonitor_app_fingerprint';
+        const FINGERPRINT_EXPIRE_KEY = 'pageMonitor_app_fingerprint_expire';
+        
+        // 指纹过期时间配置（毫秒）
+        const FINGERPRINT_EXPIRY_MS = this.fingerprintExpiryDays * 24 * 60 * 60 * 1000;
+        
+        // 首先尝试从localStorage获取缓存的指纹和过期时间
+        try {
+            if (typeof localStorage !== 'undefined') {
+                const cachedFingerprint = localStorage.getItem(FINGERPRINT_CACHE_KEY);
+                const cachedExpireTime = localStorage.getItem(FINGERPRINT_EXPIRE_KEY);
+                
+                // 检查指纹是否存在且未过期
+                if (cachedFingerprint && cachedExpireTime) {
+                    const currentTime = Date.now();
+                    if (currentTime < parseInt(cachedExpireTime, 10)) {
+                        this.log_debug('使用缓存的用户指纹');
+                        return cachedFingerprint;
+                    } else {
+                        this.log_debug('用户指纹已过期，需要重新生成');
+                        // 清理过期缓存
+                        localStorage.removeItem(FINGERPRINT_CACHE_KEY);
+                        localStorage.removeItem(FINGERPRINT_EXPIRE_KEY);
+                    }
+                }
+            }
+        } catch (cacheError) {
+            this.log_debug('获取指纹缓存失败:', cacheError);
+            // 忽略缓存错误，继续生成新指纹
+        }
+        
+        // 缓存不存在，生成新指纹
         try {
             const components = [];
             
@@ -595,7 +631,35 @@ class PageMonitor {
             
             // ================ 生成指纹哈希 ================
             // 使用增强的哈希算法替代简单的hashCode
-            return this.generateStrongHash(components.join('|'));
+            const fingerprint = this.generateStrongHash(components.join('|'));
+            
+            // 缓存生成的指纹到localStorage，添加双重检查避免并发问题
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    // 双重检查：在存储前再次检查是否已有其他标签页存储了指纹
+                    const existingFingerprint = localStorage.getItem(FINGERPRINT_CACHE_KEY);
+                    const existingExpireTime = localStorage.getItem(FINGERPRINT_EXPIRE_KEY);
+                    
+                    if (!existingFingerprint || !existingExpireTime || Date.now() >= parseInt(existingExpireTime, 10)) {
+                        // 计算新的过期时间
+                        const newExpireTime = Date.now() + FINGERPRINT_EXPIRY_MS;
+                        
+                        // 存储指纹和过期时间
+                        localStorage.setItem(FINGERPRINT_CACHE_KEY, fingerprint);
+                        localStorage.setItem(FINGERPRINT_EXPIRE_KEY, newExpireTime.toString());
+                        this.log_debug('指纹已缓存到localStorage，过期时间:', new Date(newExpireTime).toLocaleString());
+                    } else {
+                        // 如果已有有效指纹，返回已存在的指纹以确保一致性
+                        this.log_debug('检测到其他标签页已生成有效指纹，使用现有指纹');
+                        return existingFingerprint;
+                    }
+                }
+            } catch (cacheError) {
+                this.log_debug('缓存指纹失败:', cacheError);
+                // 忽略缓存错误，继续返回生成的指纹
+            }
+            
+            return fingerprint;
         } catch (error) {
             this.log_error('生成用户指纹失败:', error);
             // 降级方案：使用随机ID + localStorage持久化
@@ -1695,6 +1759,13 @@ class PageMonitor {
                         this.log_warn('Failed to parse customEvents from URL params:', e);
                     }
                 }
+                if (params.has('fingerprintExpiryDays')) {
+                    try {
+                        config.fingerprintExpiryDays = Number(params.get('fingerprintExpiryDays'));
+                    } catch (e) {
+                        this.log_warn('Invalid fingerprintExpiryDays in URL params:', e);
+                    }
+                }
                 
                 // 合并data-*属性（优先级更高）
                 Object.assign(config, dataConfig);
@@ -1747,4 +1818,4 @@ class PageMonitor {
             console.error('PageMonitor module export and initialization error:', exportError);
         }
     }
-})();
+})()

@@ -1,3 +1,7 @@
+import multiprocessing
+import os
+import threading
+
 from fastapi import HTTPException, Request, APIRouter
 
 from datetime import datetime
@@ -6,12 +10,33 @@ import hashlib
 import logging
 
 from mongodb import stats_collection, sites_collection
+from batch import BatchProcessor
+from security import require_login
 from util import lru_cache_with_ttl, access_system
 
 logger = logging.getLogger(__name__)
 
 # 创建API路由
 api_router = APIRouter(prefix="/api")
+
+# 全局实例管理
+_batch_processor_instance = None
+_batch_processor_lock = threading.Lock()
+
+enable_batch_processor = os.getenv("ENABLE_BATCH_PROCESSOR", "True").lower() == "true"
+
+
+def get_batch_processor() -> BatchProcessor:
+    """获取批处理器单例（线程安全）"""
+    global _batch_processor_instance
+
+    if enable_batch_processor:
+        if _batch_processor_instance is None:
+            with _batch_processor_lock:
+                if _batch_processor_instance is None:
+                    _batch_processor_instance = BatchProcessor()
+
+    return _batch_processor_instance
 
 
 def sanitize_key(key: str) -> str:
@@ -183,17 +208,40 @@ async def _track_common(request: Request, data: dict, track_type: str, detail_ha
         
         # 调用具体处理函数获取update_fields
         update_fields = detail_handler(data, track_type, system, user_fingerprint, client_ip, ip_prefix, current_date)
-        
-        # 按系统、日期和统计类型三级分片存储数据
-        # 使用更高效的更新操作，减少数据库负载和并发竞争
-        result = await stats_collection.update_one(
-            {'system': system, 'date': current_date, 'type': track_type},
-            update_fields,
-            upsert=True
-        )
 
-        return {"success": True, "matched_count": result.matched_count, "modified_count": result.modified_count}
+        # 添加到批处理队列
+        batch_key = (system, current_date, track_type)
+        processor = get_batch_processor()
 
+        batch_executed = False
+        if processor:
+            batch_executed = await processor.add(batch_key, update_fields)
+        if not batch_executed:
+            # 队列满时的降级策略
+            logger.warning("Queue full, falling back to immediate write")
+
+            # 尝试直接写入（降级方案）
+            try:
+                filter_criteria = {
+                    'system': system,
+                    'date': current_date,
+                    'type': track_type
+                }
+                await stats_collection.update_one(
+                    filter_criteria,
+                    update_fields,
+                    upsert=True
+                )
+            except Exception as write_error:
+                logger.error(f"Immediate write also failed: {write_error}")
+                raise HTTPException(
+                    status_code=503,
+                    detail="System busy, please try again later"
+                )
+        return {
+            "success": True,
+            "message": "Tracking data written immediately (queue full)"
+        }
     except Exception as e:
         logger.error(f"跟踪{track_type}失败: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"跟踪{track_type}失败: {str(e)}")
@@ -1115,3 +1163,19 @@ async def delete_system_stats(request: Request, system: str):
     except Exception as e:
         logger.error(f"API删除统计数据失败: {str(e)}", exc_info=True)
         raise
+
+
+# 添加监控端点
+@api_router.get("/batch/metrics")
+@require_login()
+async def get_metrics(request: Request):
+    """获取批处理指标端点"""
+    processor = get_batch_processor()
+    metrics = processor.get_batch_metrics() if enable_batch_processor and processor else None
+    
+    # 添加进程ID，帮助调试多进程环境下的指标问题
+    return {
+        "enabled": enable_batch_processor,
+        "process_id": os.getpid(),
+        "metrics": metrics
+    }

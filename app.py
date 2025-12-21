@@ -4,14 +4,13 @@ import os
 import secrets
 import hashlib
 import threading
-import time
 from urllib.parse import quote
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Request, Response, APIRouter, Depends, Body, Query
+from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse, JSONResponse
+from starlette.responses import RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
@@ -21,7 +20,7 @@ from starlette.staticfiles import StaticFiles
 from security import require_login, logout_user, login_user, get_current_user, JWT_EXPIRE_PERIOD, cleanup_expired_cache, \
     get_password_hash, user_cache
 import mongodb
-from track import api_router
+from track import api_router, get_batch_processor
 from util import access_system
 
 SESSION_CLEANUP_PERIOD = os.environ["SESSION_CLEANUP_PERIOD"] if "SESSION_CLEANUP_PERIOD" in os.environ else 3600
@@ -78,25 +77,45 @@ class TokenRefreshMiddleware(BaseHTTPMiddleware):
         return response
 
 
+async def start_batch_processor():
+    """启动批处理器"""
+    processor = get_batch_processor()
+    if processor:
+        await processor.start()
+
+
+async def stop_batch_processor():
+    """停止批处理器"""
+    processor = get_batch_processor()
+    if processor:
+        await processor.stop()
+
+
 # 定义lifespan事件处理器
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await mongodb.init_db()
 
     # 使用set_user_service函数注入MongoDBUserService
-    from security import get_user_service, set_user_service
+    from security import set_user_service
     set_user_service(mongodb.MongoDBUserService())
+    await start_batch_processor()
+    # 添加停止标志
+    stop_flag = threading.Event()
 
     def periodic_cleanup():
-        while True:
+        while not stop_flag.is_set():
             try:
                 cleanup_expired_cache()
             except Exception as e:
                 print(f"Cache cleanup error: {e}")
-            time.sleep(SESSION_CLEANUP_PERIOD)
+            stop_flag.wait(SESSION_CLEANUP_PERIOD)  # 使用wait替代sleep，支持及时中断
+
     cleanup_thread = threading.Thread(target=periodic_cleanup, daemon=True)
     cleanup_thread.start()
     yield
+    stop_flag.set()
+    await stop_batch_processor()
 
 app = FastAPI(title="页面访问监控API", lifespan=lifespan)
 
@@ -608,6 +627,7 @@ app.include_router(api_router)
 app.mount("/public", StaticFiles(directory="public"), name="public")
 app.mount("/webfonts", StaticFiles(directory="public/monitor/webfonts"), name="webfonts")
 app.mount("/", StaticFiles(directory="public/monitor", html=True), name="root")
+
 
 if __name__ == "__main__":
     import uvicorn
