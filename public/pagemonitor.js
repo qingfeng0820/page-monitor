@@ -109,32 +109,37 @@ class PageMonitor {
         }
     }
     
+    // 统一日志输出方法，根据log_level和配置控制是否打印
+    log(log_level, ...args) {
+        if (this.logLevel && PageMonitor.LOG_LEVELS[this.logLevel] <= PageMonitor.LOG_LEVELS[log_level]) {
+            const logMethod = {
+                debug: console.log,
+                info: console.info,
+                warn: console.warn,
+                error: console.error
+            }[PageMonitor.LOG_LEVELS[log_level]] || console.log;
+            logMethod(...args);
+        }
+    }
+
     // 日志输出方法，根据logLevel配置控制是否打印
     log_debug(...args) {
-        if (this.logLevel && PageMonitor.LOG_LEVELS[this.logLevel] <= PageMonitor.LOG_LEVELS.debug) {
-            console.log(...args);
-        }
+        this.log('debug', ...args);
     }
 
     // 提示输出方法，根据logLevel配置控制是否打印
     log_info(...args) {
-        if (this.logLevel && PageMonitor.LOG_LEVELS[this.logLevel] <= PageMonitor.LOG_LEVELS.info) {
-            console.info(...args);
-        }
+        this.log('info', ...args);
     }
     
     // 警告输出方法，根据logLevel配置控制是否打印
     log_warn(...args) {
-        if (this.logLevel && PageMonitor.LOG_LEVELS[this.logLevel] <= PageMonitor.LOG_LEVELS.warn) {
-            console.warn(...args);
-        }
+        this.log('warn', ...args);
     }
     
     // 错误输出方法，根据logLevel配置控制是否打印
     log_error(...args) {
-        if (this.logLevel && PageMonitor.LOG_LEVELS[this.logLevel] <= PageMonitor.LOG_LEVELS.error) {
-            console.error(...args);
-        }
+        this.log('error', ...args);
     }
 
     init() {
@@ -366,15 +371,26 @@ class PageMonitor {
     }
     
     // 生成用户指纹
+    // 优化的用户指纹生成方法
+    // 收集稳定、精确且能区分不同用户的客户端特征
     generateUserFingerprint() {
         try {
             const components = [];
             
-            // 浏览器和系统信息（基础信息，尽量安全获取）
+            // ================ 稳定的浏览器和系统信息 ================
             if (navigator) {
+                // 核心浏览器标识 - 非常稳定
                 components.push(navigator.userAgent || 'unknown_ua');
-                components.push(navigator.language || 'unknown_lang');
                 components.push(navigator.platform || 'unknown_platform');
+                components.push(navigator.vendor || 'unknown_vendor');
+                components.push(navigator.vendorSub || 'unknown_vendor_sub');
+                components.push(navigator.product || 'unknown_product');
+                components.push(navigator.productSub || 'unknown_product_sub');
+                
+                // 语言设置 - 稳定且有区分度
+                components.push(JSON.stringify(navigator.languages || [navigator.language || 'unknown_lang']));
+                
+                // 硬件相关信息 - 稳定
                 try {
                     components.push(navigator.hardwareConcurrency?.toString() || 'unknown_hw');
                 } catch (e) {
@@ -387,9 +403,10 @@ class PageMonitor {
                 }
             }
             
-            // 屏幕信息
+            // ================ 显示相关信息 ================
             try {
                 if (typeof screen === 'object') {
+                    // 屏幕尺寸和深度 - 非常稳定
                     components.push(screen.width?.toString() || '0');
                     components.push(screen.height?.toString() || '0');
                     components.push(screen.colorDepth?.toString() || '0');
@@ -400,44 +417,37 @@ class PageMonitor {
             }
             
             try {
+                // 设备像素比 - 稳定
                 components.push(window.devicePixelRatio?.toString() || '1');
             } catch (e) {
                 components.push('dpr_error');
             }
             
-            // 时区和时间信息
             try {
+                // 视口尺寸 - 相对稳定
+                components.push(window.innerWidth?.toString() || '0');
+                components.push(window.innerHeight?.toString() || '0');
+            } catch (e) {
+                components.push('viewport_error');
+            }
+            
+            // ================ 时区和时间信息 ================
+            try {
+                // 时区偏移 - 非常稳定
                 components.push((new Date()).getTimezoneOffset().toString());
             } catch (e) {
                 components.push('tz_error');
             }
             
             try {
+                // 时区名称 - 稳定
                 components.push(Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown_tz');
             } catch (e) {
                 components.push('intl_tz_error');
             }
             
-            // 浏览器功能和设置（使用try-catch分别获取）
-            try {
-                components.push(navigator.cookieEnabled?.toString() || 'false');
-            } catch (e) {
-                components.push('cookie_error');
-            }
-            
-            try {
-                components.push(navigator.doNotTrack || 'unknown_dnt');
-            } catch (e) {
-                components.push('dnt_error');
-            }
-            
-            try {
-                components.push(navigator.javaEnabled ? navigator.javaEnabled().toString() : 'false');
-            } catch (e) {
-                components.push('java_error');
-            }
-            
-            // 存储信息
+            // ================ 浏览器功能和API支持 ================
+            // 存储API支持 - 稳定
             try {
                 components.push(Boolean(localStorage).toString());
             } catch (e) {
@@ -453,36 +463,64 @@ class PageMonitor {
             } catch (e) {
                 components.push('indexedDB_disabled');
             }
+            try {
+                components.push(Boolean(navigator.storage).toString());
+            } catch (e) {
+                components.push('storage_api_disabled');
+            }
             
-            // 网络信息
+            // 其他稳定API支持
+            try {
+                components.push(Boolean(navigator.serviceWorker).toString());
+            } catch (e) {
+                components.push('service_worker_disabled');
+            }
+            try {
+                components.push(Boolean(navigator.permissions).toString());
+            } catch (e) {
+                components.push('permissions_api_disabled');
+            }
+            try {
+                components.push(Boolean(navigator.geolocation).toString());
+            } catch (e) {
+                components.push('geolocation_disabled');
+            }
+            
+            // ================ 网络信息 ================
             try {
                 if (navigator.connection) {
+                    // 连接类型 - 相对稳定
                     components.push(navigator.connection.effectiveType || 'unknown_conn');
-                    components.push(navigator.connection.rtt?.toString() || 'unknown_rtt');
-                    components.push(navigator.connection.downlink?.toString() || 'unknown_downlink');
+                    components.push(navigator.connection.type || 'unknown_conn_type');
                 }
             } catch (e) {
                 components.push('conn_error');
             }
             
-            // Canvas 指纹 (基础实现) - 使用try-catch隔离
+            // ================ 轻量级Canvas指纹 ================
+            // 简化的Canvas渲染，减少性能消耗但保持区分度
             try {
                 if (typeof document === 'object' && typeof document.createElement === 'function') {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 200;
-                    canvas.height = 100;
+                    canvas.width = 120;
+                    canvas.height = 40;
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
-                        ctx.fillStyle = '#222';
-                        ctx.fillRect(0, 0, 200, 100);
-                        ctx.fillStyle = '#f00';
-                        ctx.font = '18px Arial';
-                        ctx.fillText('Browser Fingerprint', 10, 50);
-                        ctx.strokeStyle = '#0f0';
-                        ctx.lineWidth = 2;
+                        // 简单但独特的渲染模式
+                        ctx.fillStyle = '#f0f0f0';
+                        ctx.fillRect(0, 0, 120, 40);
+                        ctx.fillStyle = '#2c3e50';
+                        ctx.font = '14px Arial';
+                        ctx.textBaseline = 'top';
+                        ctx.fillText('BrowserFP', 10, 10);
+                        
+                        // 添加一些几何图形增加独特性
                         ctx.beginPath();
-                        ctx.arc(150, 50, 20, 0, Math.PI * 2);
+                        ctx.strokeStyle = '#3498db';
+                        ctx.lineWidth = 2;
+                        ctx.arc(80, 25, 10, 0, Math.PI * 2);
                         ctx.stroke();
+                        
                         components.push(canvas.toDataURL());
                     }
                 }
@@ -490,75 +528,20 @@ class PageMonitor {
                 components.push('canvas_error');
             }
             
-            // WebGL 指纹 (基础实现) - 使用try-catch隔离
-            try {
-                if (typeof document === 'object' && typeof document.createElement === 'function') {
-                    const canvas = document.createElement('canvas');
-                    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-                    if (gl) {
-                        try {
-                            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                            if (debugInfo) {
-                                components.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || 'unknown_renderer');
-                                components.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || 'unknown_vendor');
-                            }
-                        } catch (glDebugError) {
-                            components.push('gl_debug_error');
-                        }
-                        
-                        try {
-                            components.push(gl.getParameter(gl.VERSION) || 'unknown_version');
-                            components.push(gl.getParameter(gl.SHADING_LANGUAGE_VERSION) || 'unknown_shader');
-                        } catch (glParamError) {
-                            components.push('gl_param_error');
-                        }
-                        
-                        try {
-                            // 检查扩展支持
-                            const extensions = gl.getSupportedExtensions() || [];
-                            components.push(extensions.sort().join(','));
-                        } catch (glExtError) {
-                            components.push('gl_ext_error');
-                        }
-                    }
-                }
-            } catch (e) {
-                components.push('webgl_error');
-            }
-            
-            // 音频上下文指纹 - 跳过，因为现代浏览器要求用户交互才能创建AudioContext
-            // 由于安全策略限制，我们不再尝试获取音频指纹，以避免控制台错误
-            components.push('audio_skip_modern_browser');
-            
-            /*
-            // 旧的音频指纹实现已被禁用，因为会触发浏览器安全策略警告
-            try {
-                if (window.AudioContext || window.webkitAudioContext) {
-                    // 只有在用户交互后才能创建AudioContext
-                    // 由于这是自动初始化的监控脚本，我们无法满足此要求
-                    // 因此直接跳过音频指纹采集
-                    components.push('audio_requires_user_interaction');
-                }
-            } catch (e) {
-                components.push('audio_error');
-            }
-            */
-            
-            // 字体检测 (基础实现) - 使用try-catch隔离且设置超时
+            // ================ 优化的字体检测 ================
+            // 测试更多常用字体，使用更可靠的检测方法
             try {
                 if (typeof document === 'object' && typeof document.createElement === 'function' && document.body) {
-                    // 创建一个不可见的测试元素
-                    const testElement = document.createElement('span');
+                    const testElement = document.createElement('div');
                     testElement.style.position = 'absolute';
                     testElement.style.left = '-9999px';
-                    testElement.style.fontSize = '72px';
+                    testElement.style.fontSize = '24px';
                     testElement.style.width = 'auto';
                     testElement.style.height = 'auto';
                     testElement.style.lineHeight = '1';
                     testElement.style.visibility = 'hidden';
-                    testElement.textContent = 'mmmmmmmmmmlli';
+                    testElement.textContent = 'The quick brown fox jumps over the lazy dog';
                     
-                    // 使用setTimeout确保即使字体检测卡住也不会影响整体功能
                     const fontDetectTimeout = setTimeout(() => {
                         try {
                             if (document.body.contains(testElement)) {
@@ -567,24 +550,28 @@ class PageMonitor {
                         } catch (cleanupError) {
                             // 忽略清理错误
                         }
-                    }, 1000); // 1秒超时
+                    }, 1500);
                     
                     try {
                         document.body.appendChild(testElement);
                         
                         // 基准字体宽度
                         testElement.style.fontFamily = 'monospace';
-                        const monospaceWidth = testElement.offsetWidth;
                         
-                        // 测试每种字体
-                        const testFonts = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Georgia'];
+                        // 扩展的常用字体列表
+                        const testFonts = [
+                            'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Georgia',
+                            'Verdana', 'Tahoma', 'Impact', 'Comic Sans MS', 'Trebuchet MS',
+                            'Arial Black', 'Bookman Old Style', 'Century Gothic', 'Garamond',
+                            'Lucida Console', 'Lucida Sans Unicode', 'Palatino Linotype'
+                        ];
+                        
                         const fontMetrics = [];
-                        
                         for (const font of testFonts) {
                             try {
                                 testElement.style.fontFamily = `'${font}', monospace`;
                                 const width = testElement.offsetWidth;
-                                fontMetrics.push(`${font}:${width === monospaceWidth ? '0' : '1'}`);
+                                fontMetrics.push(`${font}:${width}`);
                             } catch (singleFontError) {
                                 fontMetrics.push(`${font}:error`);
                             }
@@ -592,7 +579,6 @@ class PageMonitor {
                         
                         components.push(fontMetrics.join(','));
                         
-                        // 清理
                         clearTimeout(fontDetectTimeout);
                         document.body.removeChild(testElement);
                     } catch (fontTestError) {
@@ -607,9 +593,9 @@ class PageMonitor {
                 components.push('font_error');
             }
             
-            // 使用简单的哈希函数生成指纹
-            const fingerprint = this.hashCode(components.join('|'));
-            return fingerprint;
+            // ================ 生成指纹哈希 ================
+            // 使用增强的哈希算法替代简单的hashCode
+            return this.generateStrongHash(components.join('|'));
         } catch (error) {
             this.log_error('生成用户指纹失败:', error);
             // 降级方案：使用随机ID + localStorage持久化
@@ -617,13 +603,13 @@ class PageMonitor {
                 if (typeof localStorage !== 'undefined') {
                     let fallbackId = localStorage.getItem('pageMonitor_fallback_id');
                     if (!fallbackId) {
-                        fallbackId = 'fallback_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+                        fallbackId = 'fallback_' + this.generateStrongHash(Math.random().toString() + Date.now()) + '_' + Date.now();
                         try {
                             localStorage.setItem('pageMonitor_fallback_id', fallbackId);
                         } catch (storageError) {
                             this.log_error('存储fallback ID失败:', storageError);
                             // 最终降级：仅使用随机ID，不持久化
-                            fallbackId = 'temp_' + Math.random().toString(36).substr(2, 9);
+                            fallbackId = 'temp_' + this.generateStrongHash(Math.random().toString());
                         }
                     }
                     return fallbackId;
@@ -633,25 +619,58 @@ class PageMonitor {
             }
             
             // 终极降级：返回基于时间戳的ID
-            return 'ultimate_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+            return 'ultimate_' + Date.now() + '_' + this.generateStrongHash(Math.random().toString());
         }
     }
     
-    // 简单的哈希函数
-    hashCode(str) {
-        let hash = 0;
-        if (str.length === 0) return hash;
-        
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // 转换为32位整数
+    // 增强的哈希生成方法（基于MurmurHash3算法变体，同步、高性能、低碰撞率）
+    generateStrongHash(input) {
+        if (typeof input !== 'string' || input.length === 0) {
+            return '00000000';
         }
         
-        // 转换为16进制字符串
-        return Math.abs(hash).toString(16);
+        // 实现改进的MurmurHash3算法（32位变体）
+        let hash = 0;
+        let c1 = 0xcc9e2d51;
+        let c2 = 0x1b873593;
+        let r1 = 15;
+        let r2 = 13;
+        let m = 5;
+        let n = 0xe6546b64;
+        
+        let i = 0;
+        while (i < input.length) {
+            // 处理4字节块
+            let k = 0;
+            for (let j = 0; j < 4 && i < input.length; j++, i++) {
+                k |= input.charCodeAt(i) << (j * 8);
+            }
+            
+            // 应用MurmurHash3算法
+            k = Math.imul(k, c1);
+            k = (k << r1) | (k >>> (32 - r1)); // 循环左移
+            k = Math.imul(k, c2);
+            
+            hash ^= k;
+            hash = (hash << r2) | (hash >>> (32 - r2));
+            hash = Math.imul(hash, m) + n;
+        }
+        
+        // 处理剩余字节
+        hash ^= input.length;
+        
+        // 最终混合
+        hash ^= hash >>> 16;
+        hash = Math.imul(hash, 0x85ebca6b);
+        hash ^= hash >>> 13;
+        hash = Math.imul(hash, 0xc2b2ae35);
+        hash ^= hash >>> 16;
+        
+        // 转换为无符号32位整数并转换为十六进制
+        let unsignedHash = hash >>> 0;
+        let hex = unsignedHash.toString(16);
+        return hex.padStart(8, '0');
     }
-
 
     // ================== 跟踪页面访问数据 ==================
     async trackPageView() {
