@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from starlette.staticfiles import StaticFiles
 
 from security import require_login, logout_user, login_user, get_current_user, JWT_EXPIRE_PERIOD, cleanup_expired_cache, \
-    get_password_hash, user_cache
+    get_password_hash, get_user_cache, NoUserCache
 import mongodb
 from track import api_router, get_batch_processor
 from util import access_system
@@ -49,6 +49,7 @@ class ChangePasswordRequest(BaseModel):
 class AddSiteUserRequest(BaseModel):
     username: str
 
+user_cache = get_user_cache()
 
 # 生成API密钥的函数
 def _generate_api_key(site_name, site_url, username):
@@ -102,7 +103,6 @@ async def lifespan(app: FastAPI):
     await start_batch_processor()
     # 添加停止标志
     stop_flag = threading.Event()
-
     def periodic_cleanup():
         while not stop_flag.is_set():
             try:
@@ -110,9 +110,9 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"Cache cleanup error: {e}")
             stop_flag.wait(SESSION_CLEANUP_PERIOD)  # 使用wait替代sleep，支持及时中断
-
-    cleanup_thread = threading.Thread(target=periodic_cleanup, daemon=True)
-    cleanup_thread.start()
+    if user_cache and not isinstance(user_cache, NoUserCache):
+        cleanup_thread = threading.Thread(target=periodic_cleanup, daemon=True)
+        cleanup_thread.start()
     yield
     stop_flag.set()
     await stop_batch_processor()

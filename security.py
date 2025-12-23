@@ -54,7 +54,28 @@ permissions_exception = HTTPException(
 )
 
 
-class UserCache:
+class UserCache(ABC):
+    """user interface"""
+    def get(self, username: str) -> Optional[User]:
+        pass
+    
+    def set(self, username: str, user: User) -> None:
+        pass
+
+    def clear(self, username: str = None) -> None:
+        pass
+
+    def clear_all(self) -> None:
+        pass
+
+    def cleanup_expired(self) -> None:
+        pass
+
+
+class NoUserCache(UserCache):
+    pass
+
+class LocalUserCache(UserCache):
     def __init__(self, ttl: int = 300):
         self._cache: Dict[str, Tuple[User, float]] = {}  # {username: (user, expire_time)}
         self._ttl = ttl
@@ -158,6 +179,9 @@ class InMemoryUserService(UserService):
 # 全局变量存储UserService实例
 _current_user_service = None
 
+# 全局变量存储UserCache实例
+_current_user_cache = None
+
 
 def get_user_service() -> UserService:
     """获取UserService实例
@@ -180,11 +204,21 @@ def set_user_service(service: UserService) -> None:
     _current_user_service = service
 
 
-user_cache = UserCache(ttl=SESSION_TIMEOUT)
+def get_user_cache() -> UserCache:
+    """获取UserCache实例
+    """
+    global _current_user_cache
+    if _current_user_cache is None:
+        _current_user_cache = NoUserCache()
+    return _current_user_cache
 
+def set_user_cache(cache: UserCache) -> None:
+    """设置自定义的UserCache实现"""
+    global _current_user_cache
+    _current_user_cache = cache
 
 def cleanup_expired_cache() -> None:
-    user_cache.cleanup_expired()
+    _current_user_cache.cleanup_expired()
 
 
 @lru_cache(maxsize=1000)
@@ -236,11 +270,11 @@ async def get_current_user(request: Request) -> Optional[User]:
     except JWTError:
         return None
 
-    user = user_cache.get(username)
+    user = _current_user_cache.get(username)
     if user is None:
         user = await get_user_service().get_user_by_username(username)
         if user:
-            user_cache.set(username, user)
+            _current_user_cache.set(username, user)
     if user.disabled:
         return None
     return user
@@ -350,4 +384,4 @@ async def login_user(username, password):
 
 async def logout_user(username):
     _decode_jwt_cached.cache_clear()
-    user_cache.clear(username)
+    _current_user_cache.clear(username)
