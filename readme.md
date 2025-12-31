@@ -31,22 +31,31 @@
   ```
 
 ## 构建和安装PageMonitor
-1. 构建PageMonitor镜像
-  ```shell
-  sudo docker build -t simple-track .
+* 步骤
+  1. 构建PageMonitor镜像
+    ```shell
+    sudo docker build -t simple-track .
 
-  # 导出image
-  sudo docker save simple-track > simple-track.tar.gz
+    # 导出image
+    sudo docker save simple-track > simple-track.tar.gz
 
-  # 在目标机器上导入
-  sudo docker load -i simple-track.tar.gz
-  ```
-2. 运行PageMonitor容器
+    # 在目标机器上导入
+    sudo docker load -i simple-track.tar.gz
+    ```
+  2. 运行PageMonitor容器
+    ```shell
+    sudo docker run -d --name simple-track \
+      -p 8000:8000 \
+      -e MONGO_DB_CONN_STR="mongodb://monitor_admin:test123@localhost:27017/" \
+      simple-track
+    ```
+* 使用`deploy.sh`脚本自动构建和部署
   ```shell
-  sudo docker run -d --name simple-track \
-    -p 8000:8000 \
-    -e MONGO_DB_CONN_STR="mongodb://monitor_admin:test123@localhost:27017/" \
-    simple-track
+  # 在脚本所在目录创建.env文件, 参考.env.example配置.env
+  # 运行部署脚本
+  ./deploy.sh
+  # 在ubuntu上需要添加sudo权限
+  sudo ./deploy.sh
   ```
 
 ## 用PageMonitor监控网站
