@@ -398,6 +398,15 @@ function renderDownloadTrendChart(downloadData) {
                         mode: 'index',
                         intersect: false,
                         callbacks: {
+                            title: function(context) {
+                                // 在tooltip中同时显示完整的URL和日期作为标题
+                                const index = context[0].dataIndex;
+                                const date = labels[index];
+                                if (selectedValue == 'total') {
+                                    return '总趋势\n日期: ' + date;
+                                }
+                                return selectedValue + '\n日期: ' + date;
+                            },
                             label: function(context) {
                                 let label = context.dataset.label || '';
                                 if (label) {

@@ -460,10 +460,10 @@ function renderEventTrendChart(eventData) {
                         intersect: false,
                         callbacks: {
                             title: function(tooltipItems) {
-                                if (selectedEvent !== 'overall') {
-                                    return selectedEvent;
+                                if (selectedEvent == 'overall') {
+                                    return '总趋势\n日期: ' + tooltipItems[0].label;
                                 }
-                                return tooltipItems[0].label;
+                                 return selectedEvent + '\n日期: ' + tooltipItems[0].label;
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';

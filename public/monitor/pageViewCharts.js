@@ -858,8 +858,13 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                         intersect: false,
                         callbacks: {
                             title: function(context) {
-                                // 在tooltip中显示完整的URL作为标题
-                                return selectedUrl;
+                                // 在tooltip中同时显示完整的URL和日期作为标题
+                                const index = context[0].dataIndex;
+                                const date = labels[index];
+                                if (selectedUrl == 'overall') {
+                                    return '总趋势\n日期: ' + date;
+                                }
+                                return selectedUrl + '\n日期: ' + date;
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';
