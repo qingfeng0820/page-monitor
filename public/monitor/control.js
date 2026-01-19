@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // 获取用户名
     const username = localStorage.getItem('username');
     if (username) {
-        document.getElementById('username').textContent = `欢迎，${username}`;
+        document.getElementById('username').textContent = t('welcomeMessage', { username: username });
     }
 
     // 获取用户系统列表
@@ -34,7 +34,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             const result = await response.json();
 
             if (response.ok) {
-                messageDiv.textContent = '系统监控创建成功！';
+                messageDiv.textContent = t('systemCreateSuccess');
                 messageDiv.className = 'success-message';
                 messageDiv.style.display = 'block';
                 
@@ -44,12 +44,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 // 重新加载系统列表
                 await fetchSystems();
             } else {
-                messageDiv.textContent = result.detail || '系统创建失败，请稍后重试';
+                messageDiv.textContent = result.detail || t('systemCreateFailed');
                 messageDiv.className = 'error-message';
                 messageDiv.style.display = 'block';
             }
         } catch (error) {
-            messageDiv.textContent = '网络错误，请稍后重试';
+            messageDiv.textContent = t('networkError');
             messageDiv.className = 'error-message';
             messageDiv.style.display = 'block';
         }
@@ -84,8 +84,8 @@ async function fetchSystems() {
                 container.innerHTML = `
                     <div class="empty-state">
                         <i class="fas fa-box-open"></i>
-                        <h3>您还没有任何系统在监控</h3>
-                        <p>请使用下方的表单创建您的第一个系统的监控</p>
+                        <h3 data-i18n="noSystemsMonitored">${t('noSystemsMonitored')}</h3>
+                        <p data-i18n="createFirstSystem">${t('createFirstSystem')}</p>
                     </div>
                 `;
             } else {
@@ -96,7 +96,7 @@ async function fetchSystems() {
                     <div class="system-card" data-system-name="${system.site_name}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <h2 style="cursor: pointer; color: var(--primary-color);" onclick="selectSystem('${system.site_name}');"><i class="fas fa-globe"></i> ${system.site_name}</h2>
-                            ${username === system.creator ? `<button class="delete-btn" onclick="deleteSystem('${system.site_name}');" title="删除系统">
+                            ${username === system.creator ? `<button class="delete-btn" onclick="deleteSystem('${system.site_name}');" data-i18n-title="deleteSystem" title="${t('deleteSystem')}">
                                 <i class="fas fa-trash"></i>
                             </button>` : ''}
                         </div>
@@ -104,15 +104,15 @@ async function fetchSystems() {
                         <div class="api-key">
                             <div style="display: flex; align-items: bottom; justify-content: space-between; margin-bottom: 2px;">
                                 <div style="display: flex; align-items: center; gap: 10px; height: 24px;">
-                                    <span class="api-key-label" style="margin: 0; padding: 0; line-height: 24px;">嵌入代码</span>
-                                    <button class="copy-btn" onclick="copyCode('code-html-${system.site_name}', this);" title="复制当前标签页代码" style="padding: 3px 8px; font-size: 12px; height: 20px; line-height: 16px; margin: 0;">
+                                    <span class="api-key-label" style="margin: 0; padding: 0; line-height: 24px;" data-i18n="embedCode">${t('embedCode')}</span>
+                                    <button class="copy-btn" onclick="copyCode('code-html-${system.site_name}', this);" data-i18n-title="copyCurrentTabCode" title="${t('copyCurrentTabCode')}" style="padding: 3px 8px; font-size: 12px; height: 20px; line-height: 16px; margin: 0;">
                                         <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                                 <div class="code-tabs" style="font-size: 11px; background: rgba(255, 255, 255, 0.1); padding: 2px; border-radius: 15px;">
-                                    <button class="tab-btn active" onclick="switchTab('${system.site_name}', 'html');" style="padding: 3px 12px; border-radius: 12px;">HTML</button>
-                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'vue');" style="padding: 3px 12px; border-radius: 12px;">Vue</button>
-                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'react');" style="padding: 3px 12px; border-radius: 12px;">React</button>
+                                    <button class="tab-btn active" onclick="switchTab('${system.site_name}', 'html');" style="padding: 3px 12px; border-radius: 12px;" data-i18n="html">${t('html')}</button>
+                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'vue');" style="padding: 3px 12px; border-radius: 12px;" data-i18n="vue">${t('vue')}</button>
+                                    <button class="tab-btn" onclick="switchTab('${system.site_name}', 'react');" style="padding: 3px 12px; border-radius: 12px;" data-i18n="react">${t('react')}</button>
                                 </div>
                             </div>
                             <!-- HTML代码 -->
@@ -263,14 +263,14 @@ export default App;</code></pre>
                             </div>
                         </div>
                         <div style="text-align: right; color: var(--primary-color); font-size: 14px; cursor: pointer;" onclick="selectSystem('${system.site_name}');">
-                            <i class="fas fa-chart-line"></i> 查看监控数据 &gt;
+                            <i class="fas fa-chart-line"></i> <span data-i18n="viewMonitoringData">${t('viewMonitoringData')}</span>
                         </div>
                         <div class="authorization-section">
-                            <h3><i class="fas fa-user-shield"></i> 授权管理</h3>
+                            <h3><i class="fas fa-user-shield"></i> <span data-i18n="authorizationManagement">${t('authorizationManagement')}</span></h3>
                             <div class="authorization-controls">
                                 <div style="display: flex; margin-bottom: 15px;">
-                                    <input type="text" id="add-user-${system.site_name}" placeholder="输入用户名" style="flex: 1; padding: 8px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
-                                    <button onclick="addAuthorizedUser('${system.site_name}')" class="action-btn" style="padding: 8px 16px; background-color: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;" title="添加授权用户">
+                                    <input type="text" id="add-user-${system.site_name}" data-i18n-placeholder="enterUsername" placeholder="${t('enterUsername')}" style="flex: 1; padding: 8px; margin-right: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                                    <button onclick="addAuthorizedUser('${system.site_name}')" class="action-btn" style="padding: 8px 16px; background-color: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;" data-i18n-title="addAuthorizedUser" title="${t('addAuthorizedUser')}">
                                         <i class="fas fa-plus"></i>
                                     </button>
                                 </div>
@@ -304,7 +304,7 @@ export default App;</code></pre>
                             document.execCommand('copy');
                             // 显示复制成功状态
                             const originalText = button.innerHTML;
-                            button.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                            button.innerHTML = '<i class="fas fa-check"></i> ' + t('copySuccess');
                             button.classList.add('copied');
                             
                             // 3秒后恢复原始状态
@@ -313,7 +313,7 @@ export default App;</code></pre>
                                 button.classList.remove('copied');
                             }, 3000);
                         } catch (err) {
-                            console.error('复制失败:', err);
+                            console.error(t('copyFailed', { errorMessage: err.message }));
                         } finally {
                             document.body.removeChild(tempTextArea);
                         }
@@ -352,12 +352,12 @@ export default App;</code></pre>
             // 未登录，跳转到登录页面
             window.location.href = 'login.html';
         } else {
-            messageDiv.textContent = '获取系统列表失败';
+            messageDiv.textContent = t('failedToGetSystems');
             messageDiv.className = 'error-message';
             messageDiv.style.display = 'block';
         }
     } catch (error) {
-        messageDiv.textContent = '网络错误，请稍后重试';
+        messageDiv.textContent = t('networkError');
         messageDiv.className = 'error-message';
         messageDiv.style.display = 'block';
     }
@@ -375,13 +375,13 @@ function selectSystem(siteName) {
 // 删除监控系统
 function deleteSystem(siteName) {
     // 显示确认对话框
-    if (!confirm(`确定要删除系统 "${siteName}" 吗？\n此操作将删除所有监控数据和网站配置，不可恢复。`)) {
+    if (!confirm(t('confirmDeleteSystem', { siteName: siteName }))) {
         return;
     }
     
     // 显示加载提示
     const messageDiv = document.getElementById('message');
-    messageDiv.textContent = '正在删除系统...';
+    messageDiv.textContent = t('deletingSystem');
     messageDiv.className = 'info-message';
     messageDiv.style.display = 'block';
     
@@ -393,13 +393,13 @@ function deleteSystem(siteName) {
         }))
         .then(response => {
             if (!response.ok) {
-                throw new Error(`删除网站记录失败 (${response.status})`);
-            }
+            throw new Error(t('httpError', { status: response.status }));
+        }
             return response.json();
         })
         // 删除成功
         .then(result => {
-            messageDiv.textContent = `系统 "${siteName}" 删除成功！`;
+            messageDiv.textContent = t('systemDeleteSuccess', { siteName: siteName });
             messageDiv.className = 'success-message';
             messageDiv.style.display = 'block';
             
@@ -411,7 +411,7 @@ function deleteSystem(siteName) {
         // 删除失败
         .catch(error => {
             console.error('删除系统失败:', error);
-            messageDiv.textContent = `删除系统失败: ${error.message}`;
+            messageDiv.textContent = t('systemDeleteFailed', { errorMessage: error.message });
             messageDiv.className = 'error-message';
             messageDiv.style.display = 'block';
         });
@@ -463,7 +463,7 @@ function initPasswordModal() {
             const result = await response.json();
             
             if (response.ok) {
-                messageDiv.textContent = '密码修改成功！';
+                messageDiv.textContent = t('passwordChangeSuccess');
                 messageDiv.className = 'success-message';
                 messageDiv.style.display = 'block';
                 
@@ -474,12 +474,12 @@ function initPasswordModal() {
                     passwordForm.reset();
                 }, 2000);
             } else {
-                messageDiv.textContent = result.detail || '密码修改失败，请稍后重试';
+                messageDiv.textContent = result.detail || t('passwordChangeFailed');
                 messageDiv.className = 'error-message';
                 messageDiv.style.display = 'block';
             }
         } catch (error) {
-            messageDiv.textContent = '网络错误，请稍后重试';
+            messageDiv.textContent = t('networkError');
             messageDiv.className = 'error-message';
             messageDiv.style.display = 'block';
         }
@@ -508,7 +508,7 @@ function closeChangePasswordModal() {
 // 退出登录
 async function logout() {
     // 添加登出确认对话框
-    const confirmed = confirm('确定要登出吗？');
+    const confirmed = confirm(t('confirmLogout'));
     if (!confirmed) {
         return; // 用户取消登出
     }
@@ -550,7 +550,7 @@ async function loadAuthorizedUsers(siteName) {
         });
         
         if (!response.ok) {
-            throw new Error(`获取授权用户列表失败 (${response.status})`);
+            throw new Error(t('httpError', { status: response.status }));
         }
         
         const result = await response.json();
@@ -567,7 +567,7 @@ async function loadAuthorizedUsers(siteName) {
                     <span class="username">${result.creator.username}</span>
                     <span class="full-name">(${result.creator.full_name || result.creator.username})</span>
                     <span class="email">${result.creator.email || ''}</span>
-                    <span class="creator-badge">创建者</span>
+                    <span class="creator-badge" data-i18n="creator">${t('creator')}</span>
                 `;
                 userListElement.appendChild(creatorItem);
             }
@@ -587,7 +587,7 @@ async function loadAuthorizedUsers(siteName) {
                 
                 // 只有当前用户是创建者时，才显示删除按钮
                 const removeButton = currentUsername === result.creator.username ? 
-                    `<button onclick="removeAuthorizedUser('${siteName}', '${user.username}')" class="remove-btn" title="移除授权">
+                    `<button onclick="removeAuthorizedUser('${siteName}', '${user.username}')" class="remove-btn" data-i18n-title="removeUser" title="${t('removeUser')}">
                         <i class="fas fa-times"></i>
                     </button>` : '';
                 
@@ -613,7 +613,7 @@ async function addAuthorizedUser(siteName) {
     const username = inputElement.value.trim();
     
     if (!username) {
-        alert('请输入用户名');
+        alert(t('enterUsername'));
         return;
     }
     
@@ -628,27 +628,27 @@ async function addAuthorizedUser(siteName) {
         });
         
         if (!response.ok) {
-            throw new Error(`添加授权用户失败 (${response.status})`);
+            throw new Error(t('httpError', { status: response.status }));
         }
         
         const result = await response.json();
         
         if (result.success) {
-            alert(result.message);
+            alert(t('addUserSuccess'));
             inputElement.value = '';  // 清空输入框
             loadAuthorizedUsers(siteName);  // 重新加载用户列表
         } else {
-            alert('添加授权用户失败: ' + (result.message || '未知错误'));
+            alert(t('addUserFailed', { errorMessage: result.message || '未知错误' }));
         }
     } catch (error) {
         console.error('添加授权用户出错:', error);
-        alert('添加授权用户出错: ' + error.message);
+        alert(t('addUserFailed', { errorMessage: error.message || '未知错误' }));
     }
 }
 
 // 移除授权用户
 async function removeAuthorizedUser(siteName, username) {
-    if (!confirm(`确定要移除用户 ${username} 对系统 "${siteName}" 的访问权限吗？`)) {
+    if (!confirm(t('confirmRemoveUser', { username: username, siteName: siteName }))) {
         return;
     }
     
@@ -659,19 +659,24 @@ async function removeAuthorizedUser(siteName, username) {
         });
         
         if (!response.ok) {
-            throw new Error(`移除授权用户失败 (${response.status})`);
+            throw new Error(t('httpError', { status: response.status }));
         }
         
         const result = await response.json();
         
         if (result.success) {
-            alert(result.message);
+            alert(t('removeUserSuccess', { username: username, siteName: siteName }));
             loadAuthorizedUsers(siteName);  // 重新加载用户列表
         } else {
-            alert('移除授权用户失败: ' + (result.message || '未知错误'));
+            alert(t('removeUserFailed', { errorMessage: result.message || '未知错误' }));
         }
     } catch (error) {
         console.error('移除授权用户出错:', error);
-        alert('移除授权用户出错: ' + error.message);
+        alert(t('removeUserFailed', { errorMessage: error.message || '未知错误' }));
     }
 }
+
+// 监听语言变化事件，重新加载系统列表以更新动态内容的翻译
+// document.addEventListener('languageChanged', async function() {
+//     await fetchSystems();
+// });

@@ -3,8 +3,24 @@
 // 模块级变量，用于存储下载趋势图表实例
 let downloadTrendChart;
 
+// 存储当前数据，用于语言切换时重新渲染
+let currentDownloadData = null;
+
+// 监听语言切换事件
+document.addEventListener('languageChanged', function() {
+    // 如果有数据，重新渲染图表
+    if (currentDownloadData) {
+        renderDownloadCharts(currentDownloadData);
+        if (typeof renderDownloadTrendChart === 'function') {
+            renderDownloadTrendChart(currentDownloadData);
+        }
+    }
+});
+
 // 渲染下载图表
 function renderDownloadCharts(downloadData) {
+    // 存储当前数据
+    currentDownloadData = downloadData;
     // 按文件下载图表
     const downloadFileCtx = document.getElementById('downloadFileChart').getContext('2d');
     // 使用正确的数据结构 byFile 而不是 files
@@ -17,7 +33,7 @@ function renderDownloadCharts(downloadData) {
         data: {
             labels: fileLabels.map(file => file.length > 30 ? file.substring(0, 30) + '...' : file),
             datasets: [{
-                label: '下载次数',
+                label: typeof t === 'function' ? t('downloadCount') : '下载次数',
                 data: fileData,
                 backgroundColor: '#4bb543',
                 borderColor: '#3a8c35',
@@ -82,7 +98,7 @@ function renderDownloadCharts(downloadData) {
                         label: function(context) {
                             const label = sourceLabels[context.dataIndex] || context.label;
                             const value = context.parsed;
-                            return `${label}: ${value}次`;
+                            return `${label}: ${value} ${typeof t === 'function' ? t('times') : '次'}`;
                         }
                     }
                 }
@@ -108,7 +124,7 @@ function renderDownloadCharts(downloadData) {
             });
             downloadUserData = userEntries.map(([, count]) => count);
         } else {
-            downloadUserLabels = ['暂无用户数据'];
+            downloadUserLabels = [typeof t === 'function' ? t('noUserData') : '暂无用户数据'];
             downloadUserData = [1];
         }
         
@@ -121,7 +137,7 @@ function renderDownloadCharts(downloadData) {
                 data: {
                     labels: downloadUserLabels,
                     datasets: [{
-                        label: '下载次数',
+                        label: typeof t === 'function' ? t('downloadCount') : '下载次数',
                         data: downloadUserData,
                         backgroundColor: '#9d4edd',
                         borderColor: '#7209b7',
@@ -154,7 +170,7 @@ function renderDownloadCharts(downloadData) {
                             callbacks: {
                                 title: function(tooltipItems) {
                                     const index = tooltipItems[0].dataIndex;
-                                    return `用户 ${downloadUserLabels[index]}`;
+                                    return `${typeof t === 'function' ? t('user') : '用户'} ${downloadUserLabels[index]}`;
                                 }
                             }
                         }
@@ -166,7 +182,7 @@ function renderDownloadCharts(downloadData) {
         console.error('Error creating download user chart:', error);
         // 显示错误信息在图表容器中
         const downloadUserChartContainer = document.getElementById('downloadUserChart').parentElement;
-        downloadUserChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>下载用户图表加载失败</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
+        downloadUserChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>${typeof t === 'function' ? t('downloadUserChartLoadFailed') : '下载用户图表加载失败'}</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
     }
 
     // 下载IP图表 - 添加错误处理和调试信息
@@ -184,7 +200,7 @@ function renderDownloadCharts(downloadData) {
             downloadIpLabels = ipEntries.map(([ip]) => ip);
             downloadIpData = ipEntries.map(([, count]) => count);
         } else {
-            downloadIpLabels = ['暂无IP数据'];
+            downloadIpLabels = [typeof t === 'function' ? t('noIpData') : '暂无IP数据'];
             downloadIpData = [1];
         }
         
@@ -197,7 +213,7 @@ function renderDownloadCharts(downloadData) {
                 data: {
                     labels: downloadIpLabels.map(ip => ip.length > 20 ? ip.substring(0, 20) + '...' : ip),
                     datasets: [{
-                        label: '下载次数',
+                        label: typeof t === 'function' ? t('downloadCount') : '下载次数',
                         data: downloadIpData,
                         backgroundColor: '#f72585',
                         borderColor: '#c7174f',
@@ -242,7 +258,7 @@ function renderDownloadCharts(downloadData) {
         console.error('Error creating download IP chart:', error);
         // 显示错误信息在图表容器中
         const downloadIpChartContainer = document.getElementById('downloadIpChart').parentElement;
-        downloadIpChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>下载IP图表加载失败</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
+        downloadIpChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>${typeof t === 'function' ? t('downloadIpChartLoadFailed') : '下载IP图表加载失败'}</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
     }
 }
 
@@ -304,7 +320,7 @@ function renderDownloadTrendChart(downloadData) {
     
     // 初始化下拉选择框
     fileSelector.innerHTML = `
-        <option value="total">总趋势</option>
+        <option value="total">${typeof t === 'function' ? t('overallTrend') : '总趋势'}</option>
     `;
     
     // 添加文件选项
@@ -326,14 +342,14 @@ function renderDownloadTrendChart(downloadData) {
             // 总的趋势：显示所有文件的总下载次数和用户数
             countData = trendData.map(item => item.total);
             userData = trendData.map(item => item.uniqueUsers);
-            chartTitle = '总下载趋势';
+            chartTitle = typeof t === 'function' ? t('totalDownloadTrend') : '总下载趋势';
         } else {
             // 特定文件趋势
             const fileData = fileTrendMap.get(selectedValue);
             if (fileData) {
                 countData = fileData.countData;
                 userData = fileData.userData;
-                chartTitle = `${selectedValue} 下载趋势`;
+                chartTitle = `${selectedValue} ${typeof t === 'function' ? t('downloadTrend') : '下载趋势'}`;
             } else {
                 // 如果文件数据不存在，使用空数组
                 countData = [];
@@ -344,7 +360,7 @@ function renderDownloadTrendChart(downloadData) {
         // 构建datasets（使用统一的配置，只有数据来源不同）
         datasets = [
             {
-                label: '下载次数',
+                label: typeof t === 'function' ? t('downloadCount') : '下载次数',
                 data: countData,
                 borderColor: '#4bb543',
                 backgroundColor: 'rgba(75, 181, 67, 0.1)',
@@ -352,7 +368,7 @@ function renderDownloadTrendChart(downloadData) {
                 fill: true
             },
             {
-                label: '下载用户数',
+                label: typeof t === 'function' ? t('uniqueUsers') : '下载用户数',
                 data: userData,
                 borderColor: '#9d4edd',
                 backgroundColor: 'rgba(157, 78, 221, 0.1)',
@@ -380,17 +396,17 @@ function renderDownloadTrendChart(downloadData) {
                     x: {
                         display: true,
                         title: {
-                            display: true,
-                            text: '日期'
-                        }
+                        display: true,
+                        text: typeof t === 'function' ? t('date') : '日期'
+                    }
                     },
                     y: {
                         beginAtZero: true,
                         display: true,
                         title: {
-                            display: true,
-                            text: '数量'
-                        }
+                        display: true,
+                        text: typeof t === 'function' ? t('count') : '数量'
+                    }
                     }
                 },
                 plugins: {
@@ -403,9 +419,9 @@ function renderDownloadTrendChart(downloadData) {
                                 const index = context[0].dataIndex;
                                 const date = labels[index];
                                 if (selectedValue == 'total') {
-                                    return '总趋势\n日期: ' + date;
+                                    return (typeof t === 'function' ? t('overallTrend') : '总趋势') + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + date;
                                 }
-                                return selectedValue + '\n日期: ' + date;
+                                return selectedValue + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + date;
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';
@@ -431,7 +447,7 @@ function renderDownloadTrendChart(downloadData) {
                     },
                     title: {
                         display: true,
-                        text: chartTitle
+                        text: selectedValue === 'total' ? (typeof t === 'function' ? t('totalDownloadTrend') : '总下载趋势') : selectedValue + ' ' + (typeof t === 'function' ? t('downloadTrend') : '下载趋势')
                     }
                 },
                 interaction: {

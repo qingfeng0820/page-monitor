@@ -17,10 +17,10 @@ function showErrorState(message) {
             const errorHTML = `
                 <div class="empty-state">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <div>数据加载失败</div>
+                    <div>${t('dataLoadFailed')}</div>
                     <div style="font-size: 0.9rem; margin-top: 10px;">${message}</div>
                     <button onclick="loadData()" class="refresh-btn" style="margin-top: 15px;">
-                        <i class="fas fa-redo"></i> 重新加载
+                        <i class="fas fa-redo"></i> ${t('reload')}
                     </button>
                 </div>
             `;

@@ -29,6 +29,12 @@ function initDateRangeSelector() {
     document.getElementById('refreshBtn').addEventListener('click', loadData);
 }
 
+// 监听语言切换事件
+document.addEventListener('languageChanged', function() {
+    // 重新加载数据以更新所有国际化文本，包括时间单位
+    loadData();
+});
+
 // 更新日期范围
 function updateDateRange(days) {
     const today = new Date();
@@ -128,8 +134,10 @@ async function loadData() {
         }
 
         const username = localStorage.getItem('username');
-        if (username) {
-            document.getElementById('username').textContent = `欢迎，${username}`;
+        const usernameElement = document.getElementById('username');
+        if (username && usernameElement) {
+            // 只显示用户名本身，不显示欢迎语
+            usernameElement.textContent = username;
         }
         
         // 构建API URL（使用相对路径，确保在Docker容器内正常工作）
@@ -149,16 +157,24 @@ async function loadData() {
         
         // 检查响应状态
         if (!pageviewResponse.ok) {
-            throw new Error(`页面访问数据获取失败: ${pageviewResponse.status}`);
+            // 确保 t 函数存在
+            const errorMessage = typeof t === 'function' ? t('pageviewDataError', { status: pageviewResponse.status }) : `Failed to fetch page view data: ${pageviewResponse.status}`;
+            throw new Error(errorMessage);
         }
         if (!downloadResponse.ok) {
-            throw new Error(`下载数据获取失败: ${downloadResponse.status}`);
+            // 确保 t 函数存在
+            const errorMessage = typeof t === 'function' ? t('downloadDataError', { status: downloadResponse.status }) : `Failed to fetch download data: ${downloadResponse.status}`;
+            throw new Error(errorMessage);
         }
         if (!eventResponse.ok) {
-            throw new Error(`事件数据获取失败: ${eventResponse.status}`);
+            // 确保 t 函数存在
+            const errorMessage = typeof t === 'function' ? t('eventDataError', { status: eventResponse.status }) : `Failed to fetch event data: ${eventResponse.status}`;
+            throw new Error(errorMessage);
         }
         if (!durationResponse.ok) {
-            throw new Error(`页面停留时长数据获取失败: ${durationResponse.status}`);
+            // 确保 t 函数存在
+            const errorMessage = typeof t === 'function' ? t('durationDataError', { status: durationResponse.status }) : `Failed to fetch duration data: ${durationResponse.status}`;
+            throw new Error(errorMessage);
         }
         
         // 解析JSON数据
@@ -178,7 +194,9 @@ async function loadData() {
         document.getElementById('lastUpdate').textContent = new Date().toLocaleString();
         
     } catch (error) {
-        console.error('加载数据失败:', error);
+        // 确保 t 函数存在
+        const errorMessage = typeof t === 'function' ? t('loadDataFailed') : 'Failed to load data';
+        console.error(errorMessage, error);
         showErrorState(error.message);
     }
 }
@@ -241,11 +259,11 @@ function updateOverview(pageviewData, downloadData, eventData, durationData) {
         // 格式化显示：如果超过60秒，显示为分:秒格式，去掉没用的0
         let formattedDuration;
         if (avgDurationSeconds < 60) {
-            formattedDuration = `${parseFloat(avgDurationSeconds.toFixed(2))}秒`;
+            formattedDuration = `${parseFloat(avgDurationSeconds.toFixed(2))}${typeof t === 'function' ? t('second') : '秒'}`;
         } else {
             const minutes = Math.floor(avgDurationSeconds / 60);
             const seconds = avgDurationSeconds % 60;
-            formattedDuration = `${minutes}分${parseFloat(seconds.toFixed(2))}秒`;
+            formattedDuration = `${minutes}${typeof t === 'function' ? t('minute') : '分'}${parseFloat(seconds.toFixed(2))}${typeof t === 'function' ? t('second') : '秒'}`;
         }
         
         document.getElementById('avgDuration').textContent = formattedDuration;
@@ -351,11 +369,11 @@ function updatePageviewTable(pageviewData, durationData) {
         const durationCell = document.createElement('td');
         let formattedDuration;
         if (pageView.avgDuration < 60) {
-            formattedDuration = `${parseFloat(pageView.avgDuration.toFixed(2))}秒`;
+            formattedDuration = `${parseFloat(pageView.avgDuration.toFixed(2))}${typeof t === 'function' ? t('second') : '秒'}`;
         } else {
             const minutes = Math.floor(pageView.avgDuration / 60);
             const seconds = pageView.avgDuration % 60;
-            formattedDuration = `${minutes}分${parseFloat(seconds.toFixed(2))}秒`;
+            formattedDuration = `${minutes}${typeof t === 'function' ? t('minute') : '分'}${parseFloat(seconds.toFixed(2))}${typeof t === 'function' ? t('second') : '秒'}`;
         }
         durationCell.innerHTML = `<span class="badge badge-info">${formattedDuration}</span>`;
 
@@ -444,7 +462,7 @@ function updateEventTable(eventData) {
                 userCount = usersSet.size;
                 
                 eventEntries.push({
-                    category: '所有类别',
+                    category: t('allCategories'),
                     action: action,
                     count: count,
                     userCount: userCount

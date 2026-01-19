@@ -3,7 +3,30 @@
 // 模块级变量，用于存储页面访问趋势图表实例
 let pageviewTrendChart;
 
+// 存储当前数据，用于语言切换时重新渲染
+let currentPageviewData = null;
+let currentDurationData = null;
+
+// 监听语言切换事件
+document.addEventListener('languageChanged', function() {
+    // 如果有数据，重新渲染图表
+    if (currentPageviewData && currentDurationData) {
+        renderPageviewCharts(currentPageviewData, currentDurationData);
+        // 重新渲染趋势分析图表
+        if (typeof renderPageviewTrendChart === 'function') {
+            renderPageviewTrendChart(currentPageviewData, currentDurationData);
+        }
+        // 重新渲染来源页面图表
+        if (typeof renderUrlSourceChart === 'function') {
+            renderUrlSourceChart(currentPageviewData);
+        }
+    }
+});
+
 function renderPageviewCharts(pageviewData, durationData) {
+    // 存储当前数据
+    currentPageviewData = pageviewData;
+    currentDurationData = durationData;
     // URL访问图表 - 修改tooltip配置
     const urlCtx = document.getElementById('urlChart').getContext('2d');
     const urls = pageviewData.urls || {};
@@ -33,7 +56,7 @@ function renderPageviewCharts(pageviewData, durationData) {
         data: {
             labels: urlLabels.map(url => url.length > 30 ? url.substring(0, 30) + '...' : url),
             datasets: [{
-                label: '访问次数',
+                label: typeof t === 'function' ? t('visitCount') : '访问次数',
                 data: urlData,
                 backgroundColor: '#4361ee',
                 borderColor: '#3a0ca3',
@@ -41,7 +64,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 yAxisID: 'y',
                 order: 2
             }, {
-                label: '浏览用户数',
+                label: typeof t === 'function' ? t('uniqueUsers') : '浏览用户数',
                 data: uniqueUsersData,
                 backgroundColor: '#f72585',
                 borderColor: '#3a0ca3',
@@ -49,7 +72,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 yAxisID: 'y',
                 order: 2
             }, {
-                label: '平均停留时间(秒)',
+                label: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)',
                 data: durationDataArray,
                 backgroundColor: '#4cc9f0',
                 borderColor: '#3a0ca3',
@@ -70,7 +93,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                     },
                     title: {
                         display: true,
-                        text: '访问次数'
+                        text: typeof t === 'function' ? t('visitCount') : '访问次数'
                     }
                 },
                 y1: {
@@ -81,7 +104,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                     },
                     title: {
                         display: true,
-                        text: '平均停留时间(秒)'
+                        text: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'
                     }
                 }
             },
@@ -171,7 +194,7 @@ function renderPageviewCharts(pageviewData, durationData) {
     deviceChart = new Chart(deviceCtx, {
         type: 'polarArea',
         data: {
-            labels: deviceLabels.length > 0 ? deviceLabels : ['暂无设备数据'],
+            labels: deviceLabels.length > 0 ? deviceLabels : [typeof t === 'function' ? t('noDataAvailable') : '暂无设备数据'],
             datasets: [{
                 data: deviceData.length > 0 ? deviceData : [1],
                 backgroundColor: [
@@ -222,7 +245,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 return 0;
             });
         } else {
-            userLabels = ['暂无用户数据'];
+            userLabels = [typeof t === 'function' ? t('noDataAvailable') : '暂无用户数据'];
             userData = [1];
             avgDurationData = [0];
         }
@@ -236,7 +259,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 data: {
                     labels: userLabels,
                     datasets: [{
-                        label: '访问次数',
+                        label: typeof t === 'function' ? t('visitCount') : '访问次数',
                         data: userData,
                         backgroundColor: '#9d4edd',
                         borderColor: '#7209b7',
@@ -244,7 +267,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                         yAxisID: 'y',
                         order: 2
                     }, {
-                        label: '平均停留时间(秒)',
+                        label: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)',
                         data: avgDurationData,
                         backgroundColor: '#4cc9f0',
                         borderColor: '#3a0ca3',
@@ -258,6 +281,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
+
                         y: {
                             beginAtZero: true,
                             ticks: {
@@ -266,7 +290,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '访问次数'
+                                text: typeof t === 'function' ? t('visitCount') : '访问次数'
                             }
                         },
                         y1: {
@@ -277,9 +301,10 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '平均停留时间(秒)'
+                                text: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'
                             }
                         },
+
                         x: {
                             ticks: {
                                 maxRotation: 45,
@@ -295,9 +320,9 @@ function renderPageviewCharts(pageviewData, durationData) {
                         tooltip: {
                             callbacks: {
                                 title: function(tooltipItems) {
-                                    const index = tooltipItems[0].dataIndex;
-                                    return `用户 ${userLabels[index]}`;
-                                }
+                                const index = tooltipItems[0].dataIndex;
+                                return (typeof t === 'function' ? t('user') : '用户') + ` ${userLabels[index]}`;
+                            }
                             }
                         }
                     }
@@ -305,11 +330,11 @@ function renderPageviewCharts(pageviewData, durationData) {
             });
         }
     } catch (error) {
-        console.error('Error creating user chart:', error);
-        // 显示错误信息在图表容器中
-        const userChartContainer = document.getElementById('userChart').parentElement;
-        userChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>用户图表加载失败</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
-    }
+            console.error('Error creating user chart:', error);
+            // 显示错误信息在图表容器中
+            const userChartContainer = document.getElementById('userChart').parentElement;
+            userChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>${typeof t === 'function' ? t('loadDataFailed') : '用户图表加载失败'}</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
+        }
 
     // IP图表 - 添加错误处理和调试信息
     try {
@@ -344,7 +369,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 return 0;
             });
         } else {
-            ipLabels = ['暂无IP数据'];
+            ipLabels = [typeof t === 'function' ? t('noDataAvailable') : '暂无IP数据'];
             ipData = [1];
             uniqueUsersData = [0];
             avgDurationData = [0];
@@ -359,7 +384,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                 data: {
                     labels: ipLabels.map(ip => ip.length > 20 ? ip.substring(0, 20) + '...' : ip),
                     datasets: [{
-                        label: '访问次数',
+                        label: typeof t === 'function' ? t('visitCount') : '访问次数',
                         data: ipData,
                         backgroundColor: '#4361ee',
                         borderColor: '#3a0ca3',
@@ -367,7 +392,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                         yAxisID: 'y',
                         order: 2
                     }, {
-                        label: '浏览用户数',
+                        label: typeof t === 'function' ? t('uniqueUsers') : '浏览用户数',
                         data: uniqueUsersData,
                         backgroundColor: '#f72585',
                         borderColor: '#3a0ca3',
@@ -375,7 +400,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                         yAxisID: 'y',
                         order: 2
                     }, {
-                        label: '平均停留时间(秒)',
+                        label: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)',
                         data: avgDurationData,
                         backgroundColor: '#4cc9f0',
                         borderColor: '#3a0ca3',
@@ -397,7 +422,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '访问次数'
+                                text: typeof t === 'function' ? t('visitCount') : '访问次数'
                             }
                         },
                         y1: {
@@ -408,7 +433,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '平均停留时间(秒)'
+                                text: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'
                             }
                         },
                         x: {
@@ -436,11 +461,11 @@ function renderPageviewCharts(pageviewData, durationData) {
             });
         }
     } catch (error) {
-        console.error('Error creating IP chart:', error);
-        // 显示错误信息在图表容器中
-        const ipChartContainer = document.getElementById('ipChart').parentElement;
-        ipChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>IP图表加载失败</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
-    }
+            console.error('Error creating IP chart:', error);
+            // 显示错误信息在图表容器中
+            const ipChartContainer = document.getElementById('ipChart').parentElement;
+            ipChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>${typeof t === 'function' ? t('loadDataFailed') : 'IP图表加载失败'}</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
+        }
 
     // 组合分析图表 - 组合浏览器和操作系统（同时展示访问次数和唯一用户数）
     try {
@@ -471,13 +496,13 @@ function renderPageviewCharts(pageviewData, durationData) {
             });
             
             datasets.push({
-                label: `${os} - 访问次数`,
+                label: `${os} - ${typeof t === 'function' ? t('visitCount') : '访问次数'}`,
                 data: data,
                 backgroundColor: '#4361ee', // 与URL图一致的背景色
                 borderColor: '#3a0ca3', // 与URL图一致的边框色
                 borderWidth: 1, // 与URL图一致的边框宽度
                 yAxisID: 'y', // 关联到唯一的Y轴
-                stack: '访问次数', // 同一操作系统的数据堆叠
+                stack: typeof t === 'function' ? t('visitCount') : '访问次数', // 同一操作系统的数据堆叠
                 order: 2 // 与URL图一致的图层顺序
             });
         });
@@ -490,14 +515,14 @@ function renderPageviewCharts(pageviewData, durationData) {
             });
             
             datasets.push({
-                label: `${os} - 浏览用户数`,
+                label: `${os} - ${typeof t === 'function' ? t('uniqueUsers') : '浏览用户数'}`,
                 data: userData,
                 backgroundColor: '#f72585', // 与URL图一致的背景色
                 borderColor: '#3a0ca3', // 与URL图一致的边框色
                 borderWidth: 1, // 与URL图一致的边框宽度
                 fill: true, // 启用填充
                 yAxisID: 'y', // 关联到同一Y轴
-                stack: '浏览用户数', // 同一操作系统的数据堆叠
+                stack: typeof t === 'function' ? t('uniqueUsers') : '浏览用户数', // 同一操作系统的数据堆叠
                 order: 2 // 与URL图一致的图层顺序
             });
         });
@@ -521,15 +546,15 @@ function renderPageviewCharts(pageviewData, durationData) {
                 });
                 
                 datasets.push({
-                    label: `${os} - 平均停留时间(秒)`,
-                    data: avgDurationData,
-                    backgroundColor: '#4cc9f0', // 与URL图完全一致的背景色
-                    borderColor: '#3a0ca3', // 与URL图完全一致的边框色
-                    borderWidth: 1, // 与URL图完全一致的边框宽度
-                    type: 'line', // 与URL图一致的图表类型
-                    yAxisID: 'y1', // 与URL图一致的Y轴配置
-                    order: 1 // 与URL图一致的图层顺序
-                });
+                label: `${os} - ${typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'}`,
+                data: avgDurationData,
+                backgroundColor: '#4cc9f0', // 与URL图完全一致的背景色
+                borderColor: '#3a0ca3', // 与URL图完全一致的边框色
+                borderWidth: 1, // 与URL图完全一致的边框宽度
+                type: 'line', // 与URL图一致的图表类型
+                yAxisID: 'y1', // 与URL图一致的Y轴配置
+                order: 1 // 与URL图一致的图层顺序
+            });
             });
         }
         
@@ -554,7 +579,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '访问次数'
+                                text: typeof t === 'function' ? t('visitCount') : '访问次数'
                             }
                         },
                         y1: {
@@ -565,7 +590,7 @@ function renderPageviewCharts(pageviewData, durationData) {
                             },
                             title: {
                                 display: true,
-                                text: '平均停留时间(秒)'
+                                text: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'
                             }
                         }
                     },
@@ -590,7 +615,7 @@ function renderPageviewCharts(pageviewData, durationData) {
         console.error('Error creating combination chart:', error);
         // 显示错误信息在图表容器中
         const combinationChartContainer = document.getElementById('combinationChart').parentElement;
-        combinationChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>组合分析图表加载失败</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
+        combinationChartContainer.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><div>${typeof t === 'function' ? t('loadDataFailed') : '组合分析图表加载失败'}</div><div style="font-size: 0.9rem; margin-top: 10px;">${error.message}</div></div>`;
     }
 }
 
@@ -673,7 +698,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
     // 初始化URL选择框
     if (urlSelector) {
         // 清空现有选项
-        urlSelector.innerHTML = '<option value="overall">总趋势</option>';
+        urlSelector.innerHTML = `<option value="overall">${typeof t === 'function' ? t('overallTrend') : '总趋势'}</option>`;
         
         // 按访问次数排序URL
         const sortedUrls = Array.from(urlCountMap.entries())
@@ -702,7 +727,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
             // 总趋势图
             totalData = pageviewTrendData.map(item => item.total);
             uniqueUsersData = pageviewTrendData.map(item => item.uniqueUsers);
-            chartTitle = '总访问趋势';
+            chartTitle = typeof t === 'function' ? t('overallTrend') : '总访问趋势';
             
             // 计算每天的平均停留时间
             // 创建日期到停留时长数据的映射，便于快速查找
@@ -729,12 +754,12 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                 uniqueUsersData = urlData.userData;
                 // 对长URL进行省略处理
                 const truncatedUrl = selectedUrl.length > 30 ? selectedUrl.substring(0, 30) + '...' : selectedUrl;
-                chartTitle = `${truncatedUrl} 访问趋势`;
+                chartTitle = `${truncatedUrl} ${typeof t === 'function' ? t('visitTrend') : '访问趋势'}`;
             } else {
                 // 如果找不到URL数据，默认为总趋势
                 totalData = pageviewTrendData.map(item => item.total);
                 uniqueUsersData = pageviewTrendData.map(item => item.uniqueUsers);
-                chartTitle = '总访问趋势';
+                chartTitle = typeof t === 'function' ? t('overallTrend') : '总访问趋势';
             }
             
             // 计算单个URL每天的平均停留时间
@@ -761,7 +786,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
         // 构建基础数据集（访问次数和浏览用户数）
         datasets = [
             {
-                label: '访问次数',
+                label: typeof t === 'function' ? t('visitCount') : '访问次数',
                 data: totalData,
                 borderColor: '#4361ee',
                 backgroundColor: 'rgba(67, 97, 238, 0.1)',
@@ -770,7 +795,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                 yAxisID: 'y'
             },
             {
-                label: '浏览用户数',
+                label: typeof t === 'function' ? t('uniqueUsers') : '浏览用户数',
                 data: uniqueUsersData,
                 borderColor: '#f72585',
                 backgroundColor: 'rgba(247, 37, 133, 0.1)',
@@ -783,7 +808,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
         // 如果有平均停留时间数据，添加到数据集中
         if (avgDurationData) {
             datasets.push({
-                label: '平均停留时间(秒)',
+                label: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)',
                 data: avgDurationData,
                 borderColor: '#4cc9f0',
                 backgroundColor: 'rgba(76, 201, 240, 0.1)',
@@ -818,7 +843,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                         display: true,
                         title: {
                             display: true,
-                            text: '日期'
+                            text: typeof t === 'function' ? t('date') : '日期'
                         },
                         ticks: {
                             maxRotation: 0,
@@ -830,7 +855,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                         display: true,
                         title: {
                             display: true,
-                            text: '数量'
+                            text: typeof t === 'function' ? t('count') : '数量'
                         }
                     },
                     y1: {
@@ -842,7 +867,7 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                         display: true,
                         title: {
                             display: true,
-                            text: '平均停留时间(秒)'
+                            text: typeof t === 'function' ? t('averageTime') : '平均停留时间(秒)'
                         },
                         // 只有当没有平均停留时间数据时才隐藏第二个Y轴
                         hidden: !avgDurationData
@@ -862,9 +887,9 @@ function renderPageviewTrendChart(pageviewData, durationData) {
                                 const index = context[0].dataIndex;
                                 const date = labels[index];
                                 if (selectedUrl == 'overall') {
-                                    return '总趋势\n日期: ' + date;
+                                    return (typeof t === 'function' ? t('overallTrend') : '总趋势') + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + date;
                                 }
-                                return selectedUrl + '\n日期: ' + date;
+                                return selectedUrl + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + date;
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';
@@ -920,7 +945,7 @@ function renderUrlSourceChart(pageviewData) {
     const urlSourceUrlSelect = document.getElementById('urlSourceUrlSelect');
     
     // 清空并初始化URL选择器
-    urlSourceUrlSelect.innerHTML = '<option value="overall">所有页面</option>';
+    urlSourceUrlSelect.innerHTML = `<option value="overall">${typeof t === 'function' ? t('allCategories') : '所有页面'}</option>`;
     
     // 添加URL选项
     Object.keys(urlAndReferrer).forEach(url => {
@@ -956,13 +981,13 @@ function renderUrlSourceChart(pageviewData) {
         
         const labels = sortedSources.map(([referrer]) => {
             // 将"unknown"标签改为"直接访问"
-            const displayReferrer = referrer === 'unknown' ? '直接访问' : referrer;
+            const displayReferrer = referrer === 'unknown' ? (typeof t === 'function' ? t('directAccess') : '直接访问') : referrer;
             return displayReferrer.length > 30 ? displayReferrer.substring(0, 30) + '...' : displayReferrer;
         });
         const data = sortedSources.map(([, count]) => count);
         const fullLabels = sortedSources.map(([referrer]) => {
             // 将"unknown"标签改为"直接访问"
-            return referrer === 'unknown' ? '直接访问' : referrer;
+            return referrer === 'unknown' ? (typeof t === 'function' ? t('directAccess') : '直接访问') : referrer;
         });
         
         // 销毁旧图表
@@ -976,7 +1001,7 @@ function renderUrlSourceChart(pageviewData) {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: '访问次数',
+                    label: typeof t === 'function' ? t('visitCount') : '访问次数',
                     data: data,
                     backgroundColor: '#4361ee',
                     borderColor: '#3a0ca3',
@@ -988,15 +1013,15 @@ function renderUrlSourceChart(pageviewData) {
                 maintainAspectRatio: false,
                 scales: {
                     y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            },
+                            title: {
+                                display: true,
+                                text: typeof t === 'function' ? t('visitCount') : '访问次数'
+                            }
                         },
-                        title: {
-                            display: true,
-                            text: '访问次数'
-                        }
-                    },
                     x: {
                         ticks: {
                             maxRotation: 45,
@@ -1019,7 +1044,7 @@ function renderUrlSourceChart(pageviewData) {
                     },
                     title: {
                         display: true,
-                        text: selectedUrl === 'overall' ? '所有页面的访问来源统计' : `页面 "${selectedUrl}" 的访问来源统计`
+                        text: selectedUrl === 'overall' ? (typeof t === 'function' ? t('allPagesSourceStats') : '所有页面的访问来源统计') : (typeof t === 'function' ? t('pageSourceStats') : '页面访问来源统计').replace('{url}', selectedUrl)
                     }
                 }
             }

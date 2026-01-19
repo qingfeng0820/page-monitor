@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 - 页面监控系统</title>
+    <title id="pageTitle">登录 - 页面监控系统</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 576 512'%3E%3Cpath fill='%234a90e2' d='M560 160H160v352h400V160zM128 0C57.3 0 0 57.3 0 128v352c0 70.7 57.3 128 128 128h448c70.7 0 128-57.3 128-128V128c0-70.7-57.3-128-128-128H128zm384 400H160V128h352v352zM240 240l64 96 96-128-72-64-112 144-72-64 136-144z'/%3E%3C/svg%3E" type="image/svg+xml">
+    <script src="i18n.js"></script>
     <script src="chart.js"></script>
     <link rel="stylesheet" href="fontawesome.css">
     <link rel="stylesheet" href="index.css">
@@ -16,6 +17,17 @@
             padding: 2rem;
             border-radius: var(--border-radius);
             box-shadow: var(--card-shadow);
+        }
+        .language-selector {
+            text-align: right;
+            margin-bottom: 1rem;
+        }
+        .language-selector select {
+            padding: 0.5rem;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius);
+            background-color: var(--card-bg);
+            color: var(--text-color);
         }
         .login-title {
             text-align: center;
@@ -75,21 +87,27 @@
 </head>
 <body>
     <div class="login-container">
+        <div class="language-selector">
+            <select id="language" onchange="setLanguage(this.value)">
+                <option value="zh">中文</option>
+                <option value="en">English</option>
+            </select>
+        </div>
         <h2 class="login-title">
-            <i class="fas fa-chart-line"></i> 页面监控系统
+            <i class="fas fa-chart-line"></i> <span data-i18n="systemName">页面监控系统</span>
         </h2>
         <div id="errorMessage" class="error-message"></div>
         <form id="loginForm" class="login-form">
             <div class="form-group">
-                <label for="username">用户名</label>
-                <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                <label for="username" data-i18n="username">用户名</label>
+                <input type="text" id="username" name="username" data-i18n-placeholder="enterUsername" placeholder="请输入用户名" required>
             </div>
             <div class="form-group">
-                <label for="password">密码</label>
-                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+                <label for="password" data-i18n="password">密码</label>
+                <input type="password" id="password" name="password" data-i18n-placeholder="enterPassword" placeholder="请输入密码" required>
             </div>
             <button type="submit" class="login-btn">
-                <i class="fas fa-sign-in-alt"></i> 登录
+                <i class="fas fa-sign-in-alt"></i> <span data-i18n="login">登录</span>
             </button>
         </form>
     </div>
@@ -128,12 +146,12 @@
                     }
                 } else {
                     const data = await response.json();
-                    errorMessage.textContent = data.detail || '登录失败';
+                    errorMessage.textContent = data.detail || t('loginFailed');
                     errorMessage.style.display = 'block';
                 }
             } catch (error) {
-                console.error('登录错误:', error);
-                errorMessage.textContent = '网络错误，请稍后重试';
+                console.error(t('loginError'), error);
+                errorMessage.textContent = t('networkError');
                 errorMessage.style.display = 'block';
             }
         }

@@ -1,7 +1,23 @@
 // 事件图表渲染相关函数
 
+// 存储当前数据，用于语言切换时重新渲染
+let currentEventData = null;
+
+// 监听语言切换事件
+document.addEventListener('languageChanged', function() {
+    // 如果有数据，重新渲染图表
+    if (currentEventData) {
+        renderEventCharts(currentEventData);
+        if (typeof renderEventTrendChart === 'function') {
+            renderEventTrendChart(currentEventData);
+        }
+    }
+});
+
 // 渲染事件图表
 function renderEventCharts(eventData) {
+    // 存储当前数据
+    currentEventData = eventData;
     // 事件类型图表
     const eventTypeCtx = document.getElementById('eventTypeChart').getContext('2d');
     const eventTypeLabels = Object.keys(eventData.byType || {});
@@ -168,7 +184,7 @@ function renderEventCharts(eventData) {
     
     // 如果没有组合数据，创建一个默认的提示
     if (comboData.length === 0) {
-        comboLabels.push('暂无组合数据');
+        comboLabels.push(typeof t === 'function' ? t('noDataAvailable') : '暂无组合数据');
         comboData.push(1);
         comboColors.push('#cccccc');
     }
@@ -179,7 +195,7 @@ function renderEventCharts(eventData) {
         data: {
             labels: comboLabels,
             datasets: [{
-                label: '事件次数',
+                label: typeof t === 'function' ? t('eventCount') : '事件次数',
                 data: comboData,
                 backgroundColor: comboColors,
                 borderWidth: 1
@@ -221,7 +237,7 @@ function renderEventCharts(eventData) {
         });
         eventUserData = userEntries.map(([, count]) => count);
     } else {
-        eventUserLabels = ['暂无用户数据'];
+        eventUserLabels = [typeof t === 'function' ? t('noDataAvailable') : '暂无用户数据'];
         eventUserData = [1];
     }
     
@@ -231,7 +247,7 @@ function renderEventCharts(eventData) {
         data: {
             labels: eventUserLabels,
             datasets: [{
-                label: '事件次数',
+                label: typeof t === 'function' ? t('eventCount') : '事件次数',
                 data: eventUserData,
                 backgroundColor: '#9d4edd',
                 borderColor: '#7209b7',
@@ -271,7 +287,7 @@ function renderEventCharts(eventData) {
         eventIpLabels = ipEntries.map(([ip]) => ip);
         eventIpData = ipEntries.map(([, count]) => count);
     } else {
-        eventIpLabels = ['暂无IP数据'];
+        eventIpLabels = [typeof t === 'function' ? t('noDataAvailable') : '暂无IP数据'];
         eventIpData = [1];
     }
     
@@ -281,7 +297,7 @@ function renderEventCharts(eventData) {
         data: {
             labels: eventIpLabels.map(ip => ip.length > 20 ? ip.substring(0, 20) + '...' : ip),
             datasets: [{
-                label: '事件次数',
+                label: typeof t === 'function' ? t('eventCount') : '事件次数',
                 data: eventIpData,
                 backgroundColor: '#f72585',
                 borderColor: '#c7174f',
@@ -311,7 +327,7 @@ function renderEventCharts(eventData) {
 // 渲染事件趋势图
 function renderEventTrendChart(eventData) {
     if (!eventData || !eventData.trendData) {
-        console.error('无效的事件趋势数据');
+        console.error(typeof t === 'function' ? t('invalidEventTrendData') : '无效的事件趋势数据');
         return;
     }
 
@@ -351,7 +367,7 @@ function renderEventTrendChart(eventData) {
     // 初始化事件选择器
     if (selector) {
         // 清空现有选项
-        selector.innerHTML = '<option value="overall">总趋势</option>';
+        selector.innerHTML = `<option value="overall">${typeof t === 'function' ? t('overallTrend') : '总趋势'}</option>`;
         
         // 按事件次数排序
         const sortedEvents = Array.from(eventCountMap.entries())
@@ -377,7 +393,7 @@ function renderEventTrendChart(eventData) {
             // 总趋势图
             totalData = trendData.map(item => item.total);
             uniqueUsersData = trendData.map(item => item.uniqueUsers);
-            chartTitle = '总事件趋势';
+            chartTitle = typeof t === 'function' ? t('totalEventTrend') : '总事件趋势';
         } else {
             // 单个事件类型+动作趋势图
             if (eventTypeActionMap.has(selectedEvent)) {
@@ -386,12 +402,12 @@ function renderEventTrendChart(eventData) {
                 uniqueUsersData = eventData.userData;
                 // 对长事件类型+动作进行省略处理
                 const truncatedEvent = selectedEvent.length > 30 ? selectedEvent.substring(0, 30) + '...' : selectedEvent;
-                chartTitle = `${truncatedEvent} 趋势`;
+                chartTitle = `${truncatedEvent} ${typeof t === 'function' ? t('trend') : '趋势'}`;
             } else {
                 // 如果找不到事件数据，默认为总趋势
                 totalData = trendData.map(item => item.total);
                 uniqueUsersData = trendData.map(item => item.uniqueUsers);
-                chartTitle = '总事件趋势';
+                chartTitle = typeof t === 'function' ? t('totalEventTrend') : '总事件趋势';
             }
         }
         
@@ -407,7 +423,7 @@ function renderEventTrendChart(eventData) {
                 labels: labels,
                 datasets: [
                     {
-                        label: '事件数',
+                        label: typeof t === 'function' ? t('eventCount') : '事件数',
                         data: totalData,
                         borderColor: '#4361ee',
                         backgroundColor: 'rgba(67, 97, 238, 0.1)',
@@ -416,7 +432,7 @@ function renderEventTrendChart(eventData) {
                         yAxisID: 'y'
                     },
                     {
-                        label: '用户数',
+                        label: typeof t === 'function' ? t('userCount') : '用户数',
                         data: uniqueUsersData,
                         borderColor: '#f72585',
                         backgroundColor: 'rgba(247, 37, 133, 0.1)',
@@ -434,7 +450,7 @@ function renderEventTrendChart(eventData) {
                         display: true,
                         title: {
                             display: true,
-                            text: '日期'
+                            text: typeof t === 'function' ? t('date') : '日期'
                         }
                     },
                     y: {
@@ -442,7 +458,7 @@ function renderEventTrendChart(eventData) {
                         display: true,
                         title: {
                             display: true,
-                            text: '数量'
+                            text: typeof t === 'function' ? t('count') : '数量'
                         }
                     }
                 },
@@ -461,9 +477,9 @@ function renderEventTrendChart(eventData) {
                         callbacks: {
                             title: function(tooltipItems) {
                                 if (selectedEvent == 'overall') {
-                                    return '总趋势\n日期: ' + tooltipItems[0].label;
+                                    return (typeof t === 'function' ? t('overallTrend') : '总趋势') + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + tooltipItems[0].label;
                                 }
-                                 return selectedEvent + '\n日期: ' + tooltipItems[0].label;
+                                 return selectedEvent + '\n' + (typeof t === 'function' ? t('date') : '日期') + ': ' + tooltipItems[0].label;
                             },
                             label: function(context) {
                                 let label = context.dataset.label || '';

@@ -8,12 +8,12 @@ async function apiFetch(url, options = {}) {
             localStorage.removeItem('username');
             localStorage.removeItem('user_id');
             window.location.href = 'login.html';
-            return Promise.reject(new Error('未授权访问'));
+            return Promise.reject(new Error(t('unauthorizedAccess')));
         }
         
         return response;
     } catch (error) {
-        console.error('API请求错误:', error);
+        console.error(t('apiRequestError'), error);
         throw error;
     }
 }

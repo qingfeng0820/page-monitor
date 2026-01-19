@@ -187,24 +187,29 @@ header {
 }
 
 h1 {
-    font-size: 2.2rem;
+    font-size: 2rem;
     margin-bottom: 0.5rem;
+    line-height: 1.2;
 }
 
 .subtitle {
     opacity: 0.9;
     font-weight: 300;
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
 }
 
 .current-system {
-    font-size: 1rem;
+    font-size: 0.9rem;
     opacity: 0.95;
     font-weight: 500;
     background: rgba(255, 255, 255, 0.1);
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.8rem;
     border-radius: 20px;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     backdrop-filter: blur(5px);
+    white-space: nowrap;
 }
 
 .current-system span {
@@ -213,14 +218,16 @@ h1 {
 }
 
 .current-user {
-    font-size: 1rem;
+    font-size: 0.9rem;
     opacity: 0.95;
     font-weight: 500;
     background: rgba(255, 255, 255, 0.1);
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.8rem;
     border-radius: 20px;
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     backdrop-filter: blur(5px);
+    white-space: nowrap;
 }
 
 .current-user span {
@@ -233,6 +240,7 @@ h1 {
     gap: 1rem;
     flex-wrap: wrap;
     margin-top: 0.5rem;
+    align-items: center;
 }
 
 /* 图表控制区域样式 */

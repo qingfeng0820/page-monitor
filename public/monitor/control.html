@@ -3,20 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>配置 - 网站监控系统</title>
+    <title id="pageTitle">配置 - 网站监控系统</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 576 512'%3E%3Cpath fill='%234a90e2' d='M560 160H160v352h400V160zM128 0C57.3 0 0 57.3 0 128v352c0 70.7 57.3 128 128 128h448c70.7 0 128-57.3 128-128V128c0-70.7-57.3-128-128-128H128zm384 400H160V128h352v352zM240 240l64 96 96-128-72-64-112 144-72-64 136-144z'/%3E%3C/svg%3E" type="image/svg+xml">
     <link rel="stylesheet" href="fontawesome.css">
     <link rel="stylesheet" href="index.css">
     <link rel="stylesheet" href="control.css">
+    <script src="i18n.js"></script>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1><i class="fas fa-chart-line"></i> 监控配置 </h1>
-            <div class="user-info">
+        <header style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <!-- 左侧：标题 -->
+            <h1 style="margin: 0;"><i class="fas fa-chart-line"></i> <span data-i18n="monitorConfig">监控配置</span> </h1>
+            
+            <!-- 右侧：用户信息、语言选择器和按钮 -->
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
                 <span id="username"></span>
-                <button class="change-password-btn" onclick="openChangePasswordModal()"><i class="fas fa-key"></i> 修改密码</button>
+                <button class="change-password-btn" onclick="openChangePasswordModal()"><i class="fas fa-key"></i> <span data-i18n="modifyPassword">修改密码</span></button>
                 <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i></button>
+                <!-- 最右侧语言选择器 -->
+                <div class="language-selector">
+                    <select id="language" onchange="setLanguage(this.value)" style="background: rgba(255, 255, 255, 0.9); border: none; color: var(--dark-color); padding: 6px 10px; border-radius: 5px; font-size: 0.85rem; cursor: pointer;">
+                        <option value="zh">中文</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
             </div>
         </header>
 
@@ -27,57 +38,57 @@
         </div>
 
         <div class="create-system-section">
-            <h2><i class="fas fa-plus-circle"></i> 创建新的系统监控</h2>
+            <h2><i class="fas fa-plus-circle"></i> <span data-i18n="createNewSystem">创建新的系统监控</span></h2>
             <div id="create-message" style="display: none;"></div>
             <form id="create-system-form" class="create-system-form">
                 <div class="form-group">
-                    <label for="new-system-name">系统名称</label>
-                    <input type="text" id="new-system-name" name="system_name" placeholder="请输入系统名称" required>
-                </div>
+        <label for="new-system-name" data-i18n="systemNameLabel">系统名称</label>
+        <input type="text" id="new-system-name" name="system_name" data-i18n-placeholder="enterSystemName" placeholder="请输入系统名称" required>
+    </div>
                 <div class="form-group">
-                    <label for="new-site-url">系统URL</label>
-                    <input type="url" id="new-site-url" name="site_url" placeholder="请输入网站URL" required>
+                    <label for="new-site-url" data-i18n="systemURL">系统URL</label>
+                    <input type="url" id="new-site-url" name="site_url" data-i18n-placeholder="enterSystemURL" placeholder="请输入网站URL" required>
                 </div>
-                <button type="submit" class="create-btn"><i class="fas fa-plus"></i> 创建</button>
+                <button type="submit" class="create-btn"><i class="fas fa-plus"></i> <span data-i18n="create">创建</span></button>
             </form>
         </div>
 
         <!-- 监控脚本使用说明 -->
         <div class="create-system-section" style="margin-top: 30px;">
-            <h2><i class="fas fa-book"></i> 监控脚本使用说明</h2>
+            <h2><i class="fas fa-book"></i> <span data-i18n="monitorScriptUsage">监控脚本使用说明</span></h2>
             <div style="padding: 20px; background-color: #f8f9fa; border-radius: 8px; margin-top: 20px;">
-                <h3 style="margin-top: 0; color: #333;">基本用法</h3>
+                <h3 style="margin-top: 0; color: #333;"><span data-i18n="basicUsage">基本用法</span></h3>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-basic">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-system="系统名称" data-api-key="API密钥"&gt;&lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-basic', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-basic', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h3 style="color: #333; margin-top: 25px;">autoInitialize 功能</h3>
-                <p>脚本默认会自动初始化监控功能，无需额外配置。如果需要禁用自动初始化，可以使用以下属性：</p>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="autoInitializeFeature">autoInitialize 功能</span></h3>
+                <p data-i18n="autoInitializeDescription">脚本默认会自动初始化监控功能，无需额外配置。如果需要禁用自动初始化，可以使用以下属性：</p>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-auto-init">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-auto-init', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-auto-init', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h3 style="color: #333; margin-top: 25px;">支持的 data-xxx 属性</h3>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="supportedDataAttributes">支持的 data-xxx 属性</span></h3>
                 <ul style="margin: 15px 0; padding-left: 25px;">
-                    <li><strong>data-system</strong>: 系统名称（必填）</li>
-                    <li><strong>data-api-key</strong>: API密钥（必填）</li>
-                    <li><strong>data-api-base-url</strong>: API基础URL（默认：/api）</li>
-                    <li><strong>data-is-spa</strong>: 是否为SPA应用（true/false，默认：false）</li>
-                    <li><strong>data-is-track-downloads</strong>: 是否跟踪下载（true/false，默认：true）</li>
-                    <li><strong>data-max-pending-items</strong>: 最大待处理记录数（默认：50）</li>
-                    <li><strong>data-log-level</strong>: 日志级别（debug/info/warn/error，默认：warn）</li>
-                    <li><strong>data-custom-events</strong>: 自定义事件配置（JSON格式）</li>
-                    <li><strong>data-active-time-threshold</strong>: 活跃时间阈值（秒，默认：600秒） - 用于计算停留时间</li>
+                    <li data-i18n="dataSystem"><strong>data-system</strong>: 系统名称（必填）</li>
+                    <li data-i18n="dataApiKey"><strong>data-api-key</strong>: API密钥（必填）</li>
+                    <li data-i18n="dataApiBaseUrl"><strong>data-api-base-url</strong>: API基础URL（默认：/api）</li>
+                    <li data-i18n="dataIsSpa"><strong>data-is-spa</strong>: 是否为SPA应用（true/false，默认：false）</li>
+                    <li data-i18n="dataIsTrackDownloads"><strong>data-is-track-downloads</strong>: 是否跟踪下载（true/false，默认：true）</li>
+                    <li data-i18n="dataMaxPendingItems"><strong>data-max-pending-items</strong>: 最大待处理记录数（默认：50）</li>
+                    <li data-i18n="dataLogLevel"><strong>data-log-level</strong>: 日志级别（debug/info/warn/error，默认：warn）</li>
+                    <li data-i18n="dataCustomEvents"><strong>data-custom-events</strong>: 自定义事件配置（JSON格式）</li>
+                    <li data-i18n="dataActiveTimeThreshold"><strong>data-active-time-threshold</strong>: 活跃时间阈值（秒，默认：600秒） - 用于计算停留时间</li>
                 </ul>
                 
-                <h3 style="color: #333; margin-top: 25px;">自定义事件配置</h3>
-                <p>可以通过 data-custom-events 属性配置自定义事件监控：</p>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="customEventsConfig">自定义事件配置</span></h3>
+                <p data-i18n="customEventsDescription">可以通过 data-custom-events 属性配置自定义事件监控：</p>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-custom-events">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" 
     data-system="系统名称" 
@@ -102,25 +113,25 @@
             }
         }
     ]'&gt;&lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-custom-events', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-custom-events', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <p style="margin-top: 15px; color: #666;"><strong>配置说明：</strong></p>
+                <p style="margin-top: 15px; color: #666;"><strong data-i18n="customEventsConfigNote">配置说明：</strong></p>
                 <ul style="margin: 15px 0; padding-left: 25px; color: #666;">
-                    <li><strong>selector</strong>: CSS选择器，用于匹配要监控的元素</li>
-                    <li><strong>eventType</strong>: 事件类型（默认：click）</li>
-                    <li><strong>properties</strong>: 自定义事件属性，包含：
+                    <li data-i18n="selectorLabel"><strong>selector</strong>: CSS选择器，用于匹配要监控的元素</li>
+                    <li data-i18n="eventTypeLabel"><strong>eventType</strong>: 事件类型（默认：click）</li>
+                    <li data-i18n="propertiesLabel"><strong>properties</strong>: 自定义事件属性，包含：
                         <ul style="margin-top: 5px; padding-left: 20px;">
-                            <li>category: 事件类别</li>
-                            <li>action: 事件动作</li>
-                            <li>label: 事件标签</li>
+                            <li data-i18n="categoryLabel">category: 事件类别</li>
+                            <li data-i18n="actionLabel">action: 事件动作</li>
+                            <li data-i18n="labelLabel">label: 事件标签</li>
                         </ul>
                     </li>
                 </ul>
                 
-                <h3 style="color: #333; margin-top: 25px;">手动初始化（当禁用autoInitialize时）</h3>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="manualInitialization">手动初始化（当禁用autoInitialize时）</span></h3>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-manual-init">&lt;script src="&lt;monitor-server-address&gt;/public/pagemonitor.min.js" data-auto-init="false"&gt;&lt;/script&gt;
 &lt;script&gt;
@@ -150,18 +161,18 @@
         }
     });
 &lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-manual-init', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-manual-init', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h3 style="color: #333; margin-top: 25px;">Vue 集成方法</h3>
-                <p>将 pagemonitor.js 添加到 Vue 项目中有两种方式：全局引入和组件级引入。以下分别介绍 Vue 2 和 Vue 3 的集成方法。</p>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="vueIntegration">Vue 集成方法</span></h3>
+                <p data-i18n="vueIntegrationDescription">将 pagemonitor.js 添加到 Vue 项目中有两种方式：全局引入和组件级引入。以下分别介绍 Vue 2 和 Vue 3 的集成方法。</p>
                 
-                <h4 style="color: #555; margin-top: 20px;">Vue 2 集成</h4>
+                <h4 style="color: #555; margin-top: 20px;"><span data-i18n="vue2Integration">Vue 2 集成</span></h4>
                 
-                <h5 style="color: #666; margin-top: 15px;">全局引入（在 main.js 中）</h5>
-                <p>需要先下载 pagemonitor.min.js。</p>
+                <h5 style="color: #666; margin-top: 15px;"><span data-i18n="vue2GlobalImport">全局引入（在 main.js 中）</span></h5>
+                <p data-i18n="vue2GlobalImportNote">需要先下载 pagemonitor.min.js。</p>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue2-global">// 引入 pagemonitor.js
 import './path/to/pagemonitor.min.js';
@@ -207,12 +218,12 @@ new Vue({
     });
   }
 });</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-vue2-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-vue2-global', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h5 style="color: #666; margin-top: 15px;">组件级引入</h5>
+                <h5 style="color: #666; margin-top: 15px;"><span data-i18n="vue2ComponentImport">组件级引入</span></h5>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue2-component">&lt;template&gt;
   &lt;div&gt;Vue 2 组件&lt;/div&gt;
@@ -278,15 +289,15 @@ export default {
   }
 }
 &lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-vue2-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-vue2-component', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h4 style="color: #555; margin-top: 20px;">Vue 3 集成</h4>
+                <h4 style="color: #555; margin-top: 20px;"><span data-i18n="vue3Integration">Vue 3 集成</span></h4>
                 
-                <h5 style="color: #666; margin-top: 15px;">全局引入（在 main.js 中）</h5>
-                <p>需要先下载 pagemonitor.min.js。</p>
+                <h5 style="color: #666; margin-top: 15px;"><span data-i18n="vue3GlobalImport">全局引入（在 main.js 中）</span></h5>
+                <p data-i18n="vue3GlobalImportNote">需要先下载 pagemonitor.min.js。</p>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue3-global">// 引入 pagemonitor.js
 import './path/to/pagemonitor.min.js';
@@ -328,12 +339,12 @@ if (typeof window.PageMonitor !== 'undefined') {
 } else {
   console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
 }</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-vue3-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-vue3-global', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h5 style="color: #666; margin-top: 15px;">组件级引入（使用 &lt;script setup&gt;）</h5>
+                <h5 style="color: #666; margin-top: 15px;"><span data-i18n="vue3ComponentImport">组件级引入（使用 &lt;script setup&gt;）</span></h5>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-vue3-component">&lt;template&gt;
   &lt;div&gt;Vue 3 组件&lt;/div&gt;
@@ -400,15 +411,15 @@ onUnmounted(() => {
   }
 });
 &lt;/script&gt;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-vue3-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-vue3-component', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h3 style="color: #333; margin-top: 25px;">React 集成方法</h3>
-                <p>将 pagemonitor.js 添加到 React 项目中有两种方式：全局引入和组件级引入。</p>
-                <h4 style="color: #555; margin-top: 20px;">全局引入（在 index.js 中）</h4>
-                <p>需要先下载 pagemonitor.min.js。</p>
+                <h3 style="color: #333; margin-top: 25px;"><span data-i18n="reactIntegration">React 集成方法</span></h3>
+                <p data-i18n="reactIntegrationDescription">将 pagemonitor.js 添加到 React 项目中有两种方式：全局引入和组件级引入。</p>
+                <h4 style="color: #555; margin-top: 20px;"><span data-i18n="reactGlobalImport">全局引入（在 index.js 中）</span></h4>
+                <p data-i18n="reactGlobalImportNote">需要先下载 pagemonitor.min.js。</p>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-react-global">// 引入 pagemonitor.js
 import './path/to/pagemonitor.min.js';
@@ -449,12 +460,12 @@ if (typeof window.PageMonitor !== 'undefined') {
 } else {
   console.error('PageMonitor class not found in window object. Make sure the script loaded correctly.');
 }</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-react-global', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-react-global', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
                 
-                <h4 style="color: #555; margin-top: 20px;">组件级引入</h4>
+                <h4 style="color: #555; margin-top: 20px;"><span data-i18n="reactComponentImport">组件级引入</span></h4>
                 <div style="position: relative; margin: 15px 0;">
                     <pre style="background-color: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; margin: 0;"><code id="code-react-component">import React, { useEffect } from 'react';
 
@@ -519,7 +530,7 @@ function App() {
 }
 
 export default App;</code></pre>
-                    <button class="copy-btn" onclick="copyCode('code-react-component', this);" title="复制代码" style="position: absolute; top: 10px; right: 10px;">
+                    <button class="copy-btn" onclick="copyCode('code-react-component', this);" title="复制代码" data-i18n-title="copyCode" style="position: absolute; top: 10px; right: 10px;">
                         <i class="fas fa-copy"></i>
                     </button>
                 </div>
@@ -531,31 +542,37 @@ export default App;</code></pre>
     <div id="password-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2><i class="fas fa-key"></i> 修改密码</h2>
+                <h2><i class="fas fa-key"></i> <span data-i18n="modifyPassword">修改密码</span></h2>
                 <button class="close-btn">&times;</button>
             </div>
             <div id="password-message" style="display: none;"></div>
             <form id="password-form" class="password-form">
                 <div class="form-group">
-                    <label for="current-password">当前密码</label>
-                    <input type="password" id="current-password" name="current_password" placeholder="请输入当前密码" required>
+                    <label for="current-password" data-i18n="currentPassword">当前密码</label>
+                    <input type="password" id="current-password" name="current_password" data-i18n-placeholder="enterCurrentPassword" placeholder="请输入当前密码" required>
                 </div>
                 <div class="form-group">
-                    <label for="new-password">新密码</label>
-                    <input type="password" id="new-password" name="new_password" placeholder="请输入新密码" required>
+                    <label for="new-password" data-i18n="newPassword">新密码</label>
+                    <input type="password" id="new-password" name="new_password" data-i18n-placeholder="enterNewPassword" placeholder="请输入新密码" required>
                 </div>
                 <div class="form-group">
-                    <label for="confirm-password">确认新密码</label>
-                    <input type="password" id="confirm-password" name="confirm_password" placeholder="请再次输入新密码" required>
+                    <label for="confirm-password" data-i18n="confirmNewPassword">确认新密码</label>
+                    <input type="password" id="confirm-password" name="confirm_password" data-i18n-placeholder="confirmNewPassword" placeholder="请再次输入新密码" required>
                 </div>
                 <div class="password-form-actions">
-                    <button type="button" class="cancel-btn">取消</button>
-                    <button type="submit" class="save-btn">保存修改</button>
+                    <button type="button" class="cancel-btn" data-i18n="cancel">取消</button>
+                    <button type="submit" class="save-btn" data-i18n="saveChanges">保存修改</button>
                 </div>
             </form>
         </div>
     </div>
     <script src="api.js"></script>
     <script src="control.js"></script>
+    <script>
+        // 页面加载完成后初始化翻译
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTranslations();
+        });
+    </script>
 </body>
 </html>

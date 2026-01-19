@@ -34,7 +34,7 @@ function setupLogout() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
             // 添加登出确认对话框
-            const confirmed = confirm('确定要登出吗？');
+            const confirmed = confirm(t('confirmLogout'));
             if (!confirmed) {
                 return; // 用户取消登出
             }
