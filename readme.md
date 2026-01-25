@@ -17,7 +17,7 @@
 * 为PageMonitor创建Monggodb用户
   ```shell
   docker exec -it mongodb mongosh -u admin -p myadminsecret123 --authenticationDatabase admin
-  # mongosh "mongodb://admin:secret123@localhost:27017/admin?authSource=admin"
+  # mongosh "mongodb://admin:secret123@<mongodb-ip>:27017/admin?authSource=admin"
 
   # in mongo shell
   use admin
@@ -27,7 +27,7 @@
     roles: [ { role: 'readWrite', db: 'page_monitor' } ]
   })
 
-  # application will use mongodb://monitor_admin:test123@localhost:27017/
+  # application will use mongodb://monitor_admin:test123@<mongodb-ip>:27017/
   ```
 
 ## 构建和安装PageMonitor
@@ -46,7 +46,7 @@
     ```shell
     sudo docker run -d --name simple-track \
       -p 8000:8000 \
-      -e MONGO_DB_CONN_STR="mongodb://monitor_admin:test123@localhost:27017/" \
+      -e MONGO_DB_CONN_STR="mongodb://monitor_admin:test123@<mongodb-ip>:27017/" \
       simple-track
     ```
 * 使用`deploy.sh`脚本自动构建和部署
